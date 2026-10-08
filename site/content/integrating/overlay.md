@@ -21,8 +21,9 @@ the core. The core reads the page itself; your program only tells it where the p
 
 **One canvas pixel is one pixel of the core's output**, and the canvas is centred on it.
 The output's size is word 80's `raster_w` x `raster_h` (`h264ring_raster()`): **720 x 480**
-(576 at 50 Hz) normally, and with Video Output set to **Native (HDMI)** the size of the video
-being shown -- 852 x 480, 853 x 480, 720 x 576, 1280 x 720 ..., up to 2,048 x 2,048 (0.12). A canvas of the
+(576 at 50 Hz) on the Interlaced and Progressive outputs, and on **Native (HDMI)** -- what Video
+Output's Auto picks on a MiSTer used with HDMI only -- the size of the video being shown: 852 x
+480, 853 x 480, 720 x 576, 1280 x 720 ..., up to 2,048 x 2,048 (0.12). A canvas of the
 output's size fills it; a smaller one is centred; a wider or taller one is centred and loses its
 edge columns or lines (`ovl_clip`). Nothing is scaled, so text stays as sharp as you drew it.
 **Redraw when word 80's size changes** (a new item of another size in Native), as you already do

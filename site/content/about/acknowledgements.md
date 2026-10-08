@@ -11,10 +11,16 @@
   **jellyfin-mpv-shim**, the cast-only client whose flow the MiSTer's follows; and **MiSTerFin**
   (Pudding Studio), the first Jellyfin client for MiSTer, read for ideas (its Quick Connect flow,
   its transcode request) -- none of its code is used.
-- **FFmpeg**: its libraries demux and decode the audio in the Jellyfin client (LGPL); with the
-  ITU-T **JM** reference software it is also the decoder's verification oracle.
-- **cJSON** (Dave Gamble), **stb_truetype** (Sean Barrett), the **DejaVu** fonts, and Mozilla's
-  CA certificate list as **curl** publishes it, in the Jellyfin client.
+- **FFmpeg**: its libraries (LGPL) read the containers and decode the sound in the Jellyfin
+  client and the video player, and decode the older video formats in the player and the
+  camera viewer's Motion JPEG; with the ITU-T **JM** reference software it is also the
+  decoder's verification oracle.
+- **libusb**: the camera viewer's access to USB cameras (LGPL).
+- **OpenSSL**, **curl**, **opus**, **expat** and **libevdev**, linked into the Moonlight client
+  (and OpenSSL and curl into the Jellyfin client).
+- **cJSON** (Dave Gamble) in the Jellyfin client; **stb_truetype** (Sean Barrett) and the
+  **DejaVu** fonts, which draw the on-screen text of the Jellyfin client, the video player and
+  the camera viewer; and Mozilla's CA certificate list as **curl** publishes it.
 - The H.264 FPGA literature the decoder was sized against (Agostini et al.; Petrovsky et
   al.; K. Xu's *nova*, ideas only).
 

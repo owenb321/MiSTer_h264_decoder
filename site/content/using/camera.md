@@ -42,6 +42,9 @@ In the list of modes:
 
 The list shows only the modes the viewer can show. The one in use is marked `>`.
 
+**Program menu** in the MiSTer menu opens the list of modes (or closes it); **Send Home to the
+program** quits the viewer ([Settings](settings.md)).
+
 If you unplug the camera, the screen goes black and the viewer waits for one again: plug it
 back in, or another camera.
 

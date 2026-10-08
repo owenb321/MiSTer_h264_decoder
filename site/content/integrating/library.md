@@ -80,13 +80,12 @@ h264ring_close(r);
 - (0.11) `h264ring_caps(&st, &caps)` decodes what the core can play (word 81): `caps.max_mbs`,
   the largest picture in macroblocks (3,600: 1280x720), `caps.mb_rate`, the macroblocks a second
   it is designed for (108,000), and `caps.native_h`, the tallest 16:9 picture Native (HDMI) shows
-  at its own size (720 since 0.12, 480 before: choose a transcode no taller). A picture past `max_mbs` is not refused
+  at its own size (720: choose a transcode no taller). A picture past `max_mbs` is not refused
   at its SPS: its slices are dropped and counted (`RC_REF_SIZE`), so check before you send.
 - (0.14) `h264ring_video_out(&st)` is Video Output as the core resolved it:
   `H264RING_VOUT_INTERLACED`, `_PROGRESSIVE` or `_NATIVE`. The menu's Auto is one of them (Native
   on an HDMI-only MiSTer), so ask this -- not the menu's value -- whether pictures are shown at
-  their own pixels (a client choosing a 1280x720 transcode does). On an older core it falls back
-  to the menu's value.
+  their own pixels (a client choosing a 1280x720 transcode does).
 - (0.16) `h264ring_set_colour(r, code)` sets the colour code every later access unit carries
   (`H264RING_COLOUR_*`; 0, auto, by default: the stream's own tags, else BT.601 for standard
   definition and BT.709 from 1,280 wide or 577 high). The core takes it from a stream's first access
@@ -191,8 +190,10 @@ The reference feeder: it plays an Annex-B `.264` / `.h264` file and prints the f
 as JSON.
 
 ```text
-h264play [--fps N] [--pts] [--realtime] [--ll] [--graphics] [--colour N] [--loop N] [--switch FILE [--at N]] [--osd name=v,...]
-         [--pcm FILE [--pcm-offset MS] [--pcm-chunk MS] [--pcm-lead MS] [--audio-only]] [--atten N] [--pause A,B] [--rumble P,L,S] FILE.264
+h264play [--fps N] [--pts] [--realtime] [--ll] [--graphics] [--colour N] [--loop N] [--switch FILE [--at N] [--flush]]
+         [--osd name=v,...] [--overlay [1555|4444|8888] [--overlay-band A,B] [--overlay-size W,H]]
+         [--pcm FILE [--pcm-offset MS] [--pcm-chunk MS] [--pcm-lead MS] [--audio-only]] [--atten N] [--pause A,B]
+         [--rumble P,L,S] [--no-cavlc] [--no-launch] [--rbf PATH] [--quiet] [--list] FILE.264
 ```
 
 | option | |
@@ -219,7 +220,10 @@ h264play [--fps N] [--pts] [--realtime] [--ll] [--graphics] [--colour N] [--loop
 | `--overlay-size W,H` | a W x H canvas instead of 720 x 480 (centred by the core), the whole canvas the band, its first line an opaque white rule |
 | `--overlay-band A,B` | declare lines A..B as the overlay's band (it must contain the bar's, 420-443): the core reads them all -- `0,479` puts a full canvas's load on the decoder |
 | `--no-cavlc` | write a CAVLC stream as it is (`h264ring_set_rewrite(r, 0)`: the core refuses it). By default the library's write call does the [CAVLC rewrite](#cavlc-streams) -- a CABAC stream is untouched --; `h264play` prepares each unit before its `--realtime` due time and prints the share of one core the rewrite took |
-| `--no-launch` | do not load the core |
+| `--no-launch` | do not load the core (it must already run) |
+| `--rbf PATH` | the core to load, as the MGL's `<rbf>` (default `_Other/H264`) |
+| `--quiet` | print only the final status |
+| `--list` | print each access unit's offset and length, and exit (no core needed: a check of the library's splitter) |
 
 ## h264stat
 
@@ -236,6 +240,6 @@ receives from MiSTer's program.
 
 ## License
 
-The `hps/` directory -- the library, `h264play` and `h264stat` -- is under the **MIT
-license** (`hps/LICENSE`), so a program of any license can link the library. The rest of
+The `hps/` directory -- the library, `h264play`, `h264stat` and `cavlc2cabac` -- is under the
+**MIT license** (`hps/LICENSE`), so a program of any license can link the library. The rest of
 the core is GPL-3.0-or-later.

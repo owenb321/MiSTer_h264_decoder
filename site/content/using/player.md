@@ -17,7 +17,7 @@ sound and subtitles. You pick the file with a gamepad.
 
 | | |
 |---|---|
-| **Video** | H.264 (High or Main profile, 8-bit) up to 1280x720, any shape: a 720p film or episode, DVD-sized video, a PAL or NTSC recording, a 480p encode. Progressive, or interlaced coded as fields. Every picture is fitted to your screen's 480 or 576 lines |
+| **Video** | H.264 (High or Main profile, 8-bit) up to 1280x720, any shape: a 720p film or episode, DVD-sized video, a PAL or NTSC recording, a 480p encode. Progressive, or interlaced coded as fields. Every picture is fitted to your screen: on the Interlaced and Progressive outputs to their 480 or 576 lines, on Native (HDMI) shown at its own size |
 | **Older video** | Up to 720x576 at up to 30 frames per second: MPEG-1 and MPEG-2 (DVD rips and TV recordings, interlaced ones included), MPEG-4 Part 2 (DivX, Xvid), DivX 3, WMV 7 and 8, Theora, Motion JPEG (cameras), H.263. The MiSTer's ARM processor decodes these; the core shows them as it shows H.264 -- fitted, deinterlaced, in time with the sound |
 | **Frame rates** | 23.976 to 60 frames per second (720p: up to 30, in real time up to about 8 Mbit/s; a denser 720p30 encode may play a little behind). A 25 or 50 frames/s file switches the output to 50 Hz when **Refresh Rate** is **Auto** (below) |
 | **Files** | `.mkv`, `.mp4`, `.m4v`, `.mov`, `.ts`, `.m2ts`, `.mts`, raw `.264` / `.h264` streams, and for the older video `.avi`, `.divx`, `.mpg`, `.mpeg`, `.vob`, `.m1v`, `.m2v`, `.wmv`, `.asf`, `.ogv`, `.3gp` |

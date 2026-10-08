@@ -50,14 +50,18 @@ writes the other's words.
 | 80 | (0.10) **the raster**: the size of the core's output picture area (720 x 480, or 720 x 576 at 50 Hz; with Video Output on Native (HDMI) the video's own size, up to 2,048 x 2,048), its mode (fitted, native, or native but this picture shown fitted), whether it is shown at the HDMI display's shape with the picture letterboxed or pillarboxed inside, and where the picture's rectangle sits on it -- see [Your own screens](overlay.md#the-canvas). (0.14) `video_out`: Video Output as the core resolved it -- 1 Interlaced, 2 Progressive, 3 Native (HDMI); the menu's Auto is one of them (Native on an HDMI-only MiSTer), so read this, not the menu's value in word 27, to know whether the picture is shown at its own pixels (`h264ring_video_out()`). (0.16) `colour` (bits 29-31): the shown picture's colour code, 1-6 ([The colour](#records)) |
 | 81 | (0.11) **what the core can play** (constants): `cap_max_mbs`, the largest picture in macroblocks (3,600: 1280x720 -- a larger one's slices are dropped and counted in word 20's `rc_ref_size`); `cap_mb_rate`, the macroblocks a second the core is designed for (108,000: 1280x720 at 30, 854x480 at 60 -- real time below it also depends on the bitrate, see [Compatibility](../reference/compatibility.md)); `cap_native_h`, the tallest 16:9 picture Video Output's Native (HDMI) shows at its own size (720 since 0.12; 480 at 0.11). Read them with `h264ring_caps()` instead of hard-coding them |
 | 82-83 | (0.13) **the rumble passed to MiSTer**: each gamepad's value now (`rum_p0` to `rum_p5`; 0 when no session is open) and `rum_changes`, how many times it changed -- see [Rumble](#rumble) |
-| 86 | (0.16) **the colour**: the shown picture's colour description as its stream coded it -- `vui_matrix` (bits 0-7), `vui_primaries` (8-15), `vui_transfer` (16-23), `vui_full_range` (24), `vui_colour_present` (25; 2 / 2 / 2 / 0 / 0 when the stream has none, and for your own pictures) --, `colour_override` (26: your stream's first access unit set a non-zero code), `colour_unsup` (32-47: pictures shown by the size rule because their matrix is one the core does not convert -- GBR, YCgCo, BT.2020 constant luminance, or a newer one) and `colour_mismatch` (48-63: access units whose code differed from the stream's first), both since the stream began. The code in use is word 80's `colour` |
-| 85 | (0.15) `disp_fhold`: at 480i / 576i, field pairs held one field so that each starts on its first field's raster field -- one a stream start or a field-order change is normal; one every pair means the stream's timing sits a field off the raster (after a pause, or a 3-field frame): the fields still play in order, one field behind the sound |
 | 84 | (0.15) **the picture stores**: `pic_held` (bits 0-19: the stores the display holds), `pic_mode` (20: the stream is pictures of yours), `cap_pic_stores` (24-31: 20), `pic_emitted` (32-63: PICTURE records taken since the core started) -- see [Pictures you decode](pictures.md#the-store-rule) |
-| 85-87 | (0.10) reserved (0) |
+| 85 | (0.15) `disp_fhold`: at 480i / 576i, field pairs held one field so that each starts on its first field's raster field -- one a stream start or a field-order change is normal; one every pair means the stream's timing sits a field off the raster (after a pause, or a 3-field frame): the fields still play in order, one field behind the sound |
+| 86 | (0.16) **the colour**: the shown picture's colour description as its stream coded it -- `vui_matrix` (bits 0-7), `vui_primaries` (8-15), `vui_transfer` (16-23), `vui_full_range` (24), `vui_colour_present` (25; 2 / 2 / 2 / 0 / 0 when the stream has none, and for your own pictures) --, `colour_override` (26: your stream's first access unit set a non-zero code), `colour_unsup` (32-47: pictures shown by the size rule because their matrix is one the core does not convert -- GBR, YCgCo, BT.2020 constant luminance, or a newer one) and `colour_mismatch` (48-63: access units whose code differed from the stream's first), both since the stream began. The code in use is word 80's `colour` |
+| 87 | (0.10) reserved (0) |
 
 A consistent copy of the status block: read word 31, then the words you need, then word
 3; if the two sequence numbers differ, the core was writing -- read again. (The core writes
 words 40-47 before word 31, so the rule covers them too.) The library does this for you.
+
+**States:** NO_SESSION (no program), READY (a session, nothing decoded yet), PLAYING,
+ENDED (the stream's end was shown; the last picture stays on screen), ERROR (the core
+refused something you wrote: the error code says what).
 
 ## The input region
 
@@ -118,10 +122,6 @@ store, so both of its gamepads change together. Every value is valid.
   session and zeroes them when you close.
 - **What the user needs:** a pad with force feedback that MiSTer recognises, and MiSTer's
   `RUMBLE=1` (its default, in `MiSTer.ini`). There are no trigger motors.
-
-**States:** NO_SESSION (no program), READY (a session, nothing decoded yet), PLAYING,
-ENDED (the stream's end was shown; the last picture stays on screen), ERROR (the core
-refused something you wrote: the error code says what).
 
 ## Indices
 
@@ -265,6 +265,59 @@ real jump under 0.5 s is followed one time stamp late, and a larger one at once.
 remuxed transport stream, a rounding in a player); a program that sends none (a game stream)
 never meets the rule.
 
+## Pausing
+
+(0.5) **Word 34** is your pause and volume, one 32-bit store (the library's
+`h264ring_set_pause()` and `h264ring_set_atten()`):
+
+| bits | field |
+|---|---|
+| 0 | **PAUSE**: 1 pauses, 0 plays |
+| 7..1 | zero |
+| 15..8 | **ATTEN**: the audio's attenuation in 0.5 dB steps -- 0 full volume, 255 mute |
+| 31..16 | zero |
+
+The core reads it with every poll, so it acts within a few milliseconds: it is deliberately
+**not** a record, which would wait behind the seconds of video queued in the ring. While
+paused, the presentation clock stands still, the picture holds, the audio is silent and the
+core stops reading the ring; resuming continues the same timeline, nothing lost. A word
+with a reserved bit set is refused whole -- the previous pause and volume stay -- and
+`ctl_err` (word 45) says so until a valid word is read. The word applies during a session;
+the library writes it again at each session start, so a program that stopped while paused
+does not leave the next one paused.
+
+## Errors
+
+Every field you write is checked. The first failure stops the session in ERROR with its
+code, its position and the offending header; a new session clears it.
+
+| code | meaning |
+|---|---|
+| 1 | the write index is not a multiple of 16 |
+| 2 | the write index moved backwards, or more than a ring ahead of the read index |
+| 3 | a header's sync pattern or reserved bits are wrong (0.16: bits 36-47 of word 1; 33-35 are the colour) |
+| 4 | an unknown record type (or an unwritten header) |
+| 5 | a flag that is not defined, or not allowed on that type |
+| 6 | a payload length out of range (an empty access unit; an AUDIO record of 0 bytes or not a multiple of 4; (0.15) a PICTURE not of 32 bytes; anything over 4 MB) |
+| 7 | a record crossing the ring's end, or a PAD that does not end there |
+| 8 | a record out of sequence |
+| 9 | an access unit (or a PICTURE) after END_OF_STREAM without DISCONTINUITY |
+| 10 | a CONTROL record (reserved) |
+| 11 | (0.15) a PICTURE in a stream of access units, or an access unit in a stream of pictures |
+| 12 | (0.15) a PICTURE's field out of range: a reserved bit, structure 3, a `pic_struct` not allowed, an `aspect_ratio_idc` of 17-254 (or 255 with a zero SAR), timing with a zero field |
+| 13 | (0.15) a PICTURE's store past 19 |
+| 14 | (0.15) a PICTURE's size: a side of 0 or past 128 macroblocks, an odd height for a field pair, or more than 3,600 macroblocks |
+| 15 | (0.15) a PICTURE's crop that leaves nothing |
+| 16 | (0.15) a PICTURE naming a store the display still holds (the store rule broken) |
+| 17 | (0.16) a record's colour code is 7, or not 0 on a PAD or an AUDIO record |
+
+## Writing safely from Linux
+
+Map `/dev/mem` with `O_SYNC` (uncached). Store the record's words, issue a memory barrier,
+then store the write index as one aligned 32-bit store. **Do not `memcpy` into the
+mapping**: an unaligned store to uncached memory faults on the MiSTer's ARM. The library
+does all of this.
+
 ## Versions
 
 Word 1's low 16 bits hold the interface version, major x 256 + minor: `0x0100` is 1.0. This
@@ -403,56 +456,3 @@ A change that cannot be made that way is a new major version (2.0), never a sile
   checks the version exactly while the interface is below 1.0: rebuild your program
   against the new `h264ring_layout.h`.
 - **0.1** -- the first version.
-
-## Pausing
-
-(0.5) **Word 34** is your pause and volume, one 32-bit store (the library's
-`h264ring_set_pause()` and `h264ring_set_atten()`):
-
-| bits | field |
-|---|---|
-| 0 | **PAUSE**: 1 pauses, 0 plays |
-| 7..1 | zero |
-| 15..8 | **ATTEN**: the audio's attenuation in 0.5 dB steps -- 0 full volume, 255 mute |
-| 31..16 | zero |
-
-The core reads it with every poll, so it acts within a few milliseconds: it is deliberately
-**not** a record, which would wait behind the seconds of video queued in the ring. While
-paused, the presentation clock stands still, the picture holds, the audio is silent and the
-core stops reading the ring; resuming continues the same timeline, nothing lost. A word
-with a reserved bit set is refused whole -- the previous pause and volume stay -- and
-`ctl_err` (word 45) says so until a valid word is read. The word applies during a session;
-the library writes it again at each session start, so a program that stopped while paused
-does not leave the next one paused.
-
-## Errors
-
-Every field you write is checked. The first failure stops the session in ERROR with its
-code, its position and the offending header; a new session clears it.
-
-| code | meaning |
-|---|---|
-| 1 | the write index is not a multiple of 16 |
-| 2 | the write index moved backwards, or more than a ring ahead of the read index |
-| 3 | a header's sync pattern or reserved bits are wrong (0.16: bits 36-47 of word 1; 33-35 are the colour) |
-| 4 | an unknown record type (or an unwritten header) |
-| 5 | a flag that is not defined, or not allowed on that type |
-| 6 | a payload length out of range (an empty access unit; an AUDIO record of 0 bytes or not a multiple of 4; (0.15) a PICTURE not of 32 bytes; anything over 4 MB) |
-| 7 | a record crossing the ring's end, or a PAD that does not end there |
-| 8 | a record out of sequence |
-| 9 | an access unit (or a PICTURE) after END_OF_STREAM without DISCONTINUITY |
-| 10 | a CONTROL record (reserved) |
-| 11 | (0.15) a PICTURE in a stream of access units, or an access unit in a stream of pictures |
-| 12 | (0.15) a PICTURE's field out of range: a reserved bit, structure 3, a `pic_struct` not allowed, an `aspect_ratio_idc` of 17-254 (or 255 with a zero SAR), timing with a zero field |
-| 13 | (0.15) a PICTURE's store past 19 |
-| 14 | (0.15) a PICTURE's size: a side of 0 or past 128 macroblocks, an odd height for a field pair, or more than 3,600 macroblocks |
-| 15 | (0.15) a PICTURE's crop that leaves nothing |
-| 16 | (0.15) a PICTURE naming a store the display still holds (the store rule broken) |
-| 17 | (0.16) a record's colour code is 7, or not 0 on a PAD or an AUDIO record |
-
-## Writing safely from Linux
-
-Map `/dev/mem` with `O_SYNC` (uncached). Store the record's words, issue a memory barrier,
-then store the write index as one aligned 32-bit store. **Do not `memcpy` into the
-mapping**: an unaligned store to uncached memory faults on the MiSTer's ARM. The library
-does all of this.

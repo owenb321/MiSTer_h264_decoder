@@ -4,9 +4,9 @@
 |---|---|
 | Nothing on screen after loading the core | Try another HDMI mode or display; check that the rest of the MiSTer's video works. If the analog output also shows nothing, [report it](reporting-a-bug.md) with the core version. |
 | The test pattern shows but the white square does not move | The core has stopped. Reload it from the menu; if it happens again, [report it](reporting-a-bug.md). |
-| A program says it cannot find the core | Load the core first (or let the program load it), and check the core version matches what the program was built for: see [Integrating a program](../integrating/overview.md). |
-| The screen stays black after a video played | The program stopped sending video after a stream switch or a seek. Restart the program; `h264stat` shows the core's state and any error. |
-| A stream does not play and the status block shows a refusal | The stream uses something the core does not decode: CAVLC, MBAFF interlacing, monochrome, 4:2:2 / 4:4:4, 10-bit or lossless coding ([Compatibility](compatibility.md)). `h264stat` shows the refusal code. A program can rewrite CAVLC into CABAC with the client library ([CAVLC streams](../integrating/library.md#cavlc-streams)); `h264play` and the Moonlight client do, the Jellyfin client does not. |
+| A program cannot reach the core (its log says "Protocol not supported") | The program was built for a newer core than the one on the SD card: a program accepts a core of its own interface version or later. Install the core and the programs from the same release. "Device or resource busy" means another program is using the core: quit it first. |
+| The screen stays black after a video played | The program stopped sending video after a stream switch or a seek. Restart the program; its log says what happened. |
+| A stream does not play and the status block shows a refusal | The stream uses something the core does not decode: CAVLC, MBAFF interlacing, monochrome, 4:2:2 / 4:4:4, 10-bit or lossless coding ([Compatibility](compatibility.md)). The program's log names it. A program can rewrite CAVLC into CABAC with the client library ([CAVLC streams](../integrating/library.md#cavlc-streams)); the Moonlight client and the video player do, the Jellyfin client does not (it asks the server for a transcode instead). |
 | A CAVLC stream plays with late or dropped pictures | The program rewrites it into CABAC on the ARM, which keeps up to about 4-5 Mbit/s at 480p60; ask the source for a lower bitrate, or for CABAC ([CAVLC streams](../integrating/library.md#cavlc-streams)). |
 | A 60 frames/s stream plays with dropped frames | The core decodes up to 854x480 at 60 (or 1280x720 at 30) frames/s in real time; a larger picture or a higher rate falls behind, and the late pictures are counted in the status block ([Compatibility](compatibility.md)). |
 | A 720p film or transcode at 30 frames/s plays a little jerky | A very dense 720p30 encode (well above 8 Mbit/s: a high-bitrate file or transcode) can be more than the decoder keeps up with; up to about 8 Mbit/s, 24 and 30 frames/s films, transcodes and game streams play in real time. Choose a lower bitrate or 854x480 for the transcode, or convert the file ([Compatibility](compatibility.md)). |
@@ -54,7 +54,7 @@ The player's log is `/media/fat/h264player/h264player.log`
 |---|---|
 | **Scripts → h264player** says the player is not installed | Copy the release's `h264player/` folder to `/media/fat/`. |
 | "No video folders" | Put videos in `/media/fat/video` (the player makes it), plug in a USB drive, or list your folders in `h264player.ini` with `root=` lines. |
-| A file is missing from the list | The list shows only `.mkv`, `.mp4`, `.m4v`, `.mov`, `.ts`, `.m2ts`, `.mts`, `.264` and `.h264` files, and no hidden ones (names starting with a dot). |
+| A file is missing from the list | The list shows only the file types the player opens -- `.mkv`, `.mp4`, `.m4v`, `.mov`, `.ts`, `.m2ts`, `.mts`, `.264`, `.h264`, `.avi`, `.divx`, `.mpg`, `.mpeg`, `.vob`, `.m1v`, `.m2v`, `.wmv`, `.asf`, `.ogv` and `.3gp` -- and no hidden ones (names starting with a dot). |
 | "Cannot play: 1920x1080 is larger than 720p" (or another size) | The core decodes pictures up to 1280x720 (3,600 macroblocks). Convert the file ([Compatibility](compatibility.md#converting-a-file)). |
 | "Cannot play: 1280x720 at 60 frames/s is too fast" | The core decodes up to 1280x720 at 30 or 854x480 at 60 frames per second; a 720p file at 50 or 60 would play at half speed. Convert it to 854x480, keeping its frame rate ([Compatibility](compatibility.md#converting-a-file)). |
 | "Cannot play: 10-bit H.264", "MBAFF interlaced H.264", "4:2:2, 4:4:4 or monochrome H.264", "CAVLC H.264 the rewrite cannot carry: ..." | H.264 the core does not decode. Convert the file ([Compatibility](compatibility.md#converting-a-file)). |
@@ -84,7 +84,9 @@ The viewer's log is `/media/fat/h264cam/h264cam.log` ([Showing a USB camera](../
 
 ## The screen dims or goes black
 
-The [video player](../using/player.md#the-screensaver) and the
-[Jellyfin client](../using/jellyfin.md#the-screensaver) dim the screen after 5 minutes while
+The [video player](../using/player.md#the-screensaver), the
+[Jellyfin client](../using/jellyfin.md#the-screensaver) and the
+[camera viewer](../using/camera.md#the-screensaver) dim the screen after 5 minutes while
 nothing plays, and turn it black after 30, against burn-in. Press any button to bring it back.
-The times are in each program's `.ini` (`screensaver_dim=`, `screensaver_black=`).
+The player's and the Jellyfin client's times are in their `.ini` (`screensaver_dim=`,
+`screensaver_black=`).

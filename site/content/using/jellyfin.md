@@ -11,11 +11,13 @@ your phone, in a web browser) and play it on the MiSTer, the way you would play 
 
 ## What plays
 
-Anything on your server. When a file already suits the core (H.264 up to 1280x720 at 30
-frames per second or 854x480 at 60, 10 Mbit/s or less), the MiSTer plays the file itself.
+Anything on your server. When a file already suits the core -- H.264 at 10 Mbit/s or less, up
+to 1280x720 at 30 frames per second or up to 854x480 at 60 -- the MiSTer plays the file itself.
 Anything else -- 1080p and 4K films, HEVC, interlaced recordings -- the server converts as it
-sends it (a **transcode**) to a picture the core plays in real time, 854x480 at most. On a
-480-line TV or a CRT that loses nothing, and the core's HDMI picture is 720 pixels wide too.
+sends it (a **transcode**) to a picture the core plays in real time: **1280x720** when Video
+Output is **Native (HDMI)** (what Auto picks on a MiSTer used with HDMI only), so a 1080p film
+keeps its detail on an HD display; **854x480** on the Interlaced and Progressive outputs, which
+are 480 lines (576 at 50 Hz) and would show no more.
 
 Films and shows made at 25 frames per second (PAL) switch the output to 50 Hz when
 **Refresh Rate** is **Auto** ([Settings](settings.md)).
