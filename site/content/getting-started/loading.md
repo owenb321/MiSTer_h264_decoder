@@ -10,5 +10,6 @@ below them that moves steadily from left to right. If the square moves, the core
 running. See [On-screen messages](../using/on-screen-messages.md).
 
 The core has **no file browser entry** and loads no files through the OSD: it accepts no
-file types. Video reaches it only from a program -- for example the Moonlight client, which
-streams a PC's desktop or games ([Streaming from a PC](../using/moonlight.md)).
+file types. Video reaches it only from a program, such as the four that come with it
+([What you need](what-you-need.md)). To play a video file, run the
+[video player](../using/player.md) from the **Scripts** menu.

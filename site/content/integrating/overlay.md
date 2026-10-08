@@ -21,12 +21,13 @@ the core. The core reads the page itself; your program only tells it where the p
 
 **One canvas pixel is one pixel of the core's output**, and the canvas is centred on it.
 The output's size is word 80's `raster_w` x `raster_h` (`h264ring_raster()`): **720 x 480**
-(576 at 50 Hz) normally, and with Video Output set to **Native (HDMI)** the size of the video
-being shown -- 852 x 480, 853 x 480, 720 x 576, 1280 x 720 ..., up to 2,048 x 2,048 (0.12). A canvas of the
+(576 at 50 Hz) on the Interlaced and Progressive outputs, and on **Native (HDMI)** -- what Video
+Output's Auto picks on a MiSTer used with HDMI only -- the size of the video being shown: 852 x
+480, 853 x 480, 720 x 576, 1280 x 720 ..., up to 2,048 x 2,048. A canvas of the
 output's size fills it; a smaller one is centred; a wider or taller one is centred and loses its
 edge columns or lines (`ovl_clip`). Nothing is scaled, so text stays as sharp as you drew it.
 **Redraw when word 80's size changes** (a new item of another size in Native), as you already do
-when word 47's shape changes. A canvas may be up to 2,048 x 2,048 (0.12; 1,024 x 2,047 at 0.10).
+when word 47's shape changes. A canvas may be up to 2,048 x 2,048.
 **Size it to the output** on Native (HDMI): the core composes every column of a canvas line, the
 clipped ones too, and a native line is short -- a canvas much wider than the output (a 2,048-wide
 one on 1280 x 720) can fall behind the picture and lose lines (shown transparent, counted in
@@ -46,17 +47,16 @@ than two pages fit, draw a shorter canvas: the core centres it.
 screen, so its pixels are slightly narrow (8:9). The pixel's shape on HDMI is `ar_x / ar_y`
 x `raster_h / raster_w` (the library's `rs.aspect * rs.h / rs.w`): on a native output it is
 usually square. On HDMI the shape is what the core tells
-the scaler: word 47's `ar_x : ar_y` is the width to height of the whole output (0.10: of word
+the scaler: word 47's `ar_x : ar_y` is the width to height of the whole output (word
 80's `raster_w` x `raster_h`). With the Progressive output and Aspect Ratio and Analog Aspect
 on Auto that follows the **stream** -- a 16:9 stream makes the output 16:9 -- so a screen drawn
 for 4:3 looks stretched over it unless you redraw for `ar_x : ar_y`.
 
-**A picture wider than the HDMI display** (0.10): in that same mode, a 2.39:1 film on a
+**A picture wider than the HDMI display**: in that same mode, a 2.39:1 film on a
 16:9 display is **letterboxed inside the output** -- black bars above and below it, part of
 the output -- and HDMI is given the display's own shape, so your overlay covers the whole
 screen and the bars are yours to draw subtitles or a progress bar in (word 80's `raster_lb`
-is 1; `pic_x0`, `pic_y0` with word 30's `fit_ow` x `fit_oh` say where the picture is). Before
-0.10 the output was the film's strip and HDMI's bars were outside it, out of your reach.
+is 1; `pic_x0`, `pic_y0` with word 30's `fit_ow` x `fit_oh` say where the picture is).
 
 `h264ring_raster()` (the [library](library.md)) decodes all of it: the output's size, the
 shape it is shown at (4:3 on the interlaced output), and the picture's rectangle on it.
@@ -97,7 +97,7 @@ control block (one 32-bit value in the low half of each word):
 | 72 | the generation, written **last** |
 | 73 | bit 0: show; bits 2-1: the format -- 0 `1555`, 1 `4444`, 2 `8888`; the other bits 0 |
 | 74 | the page's physical address (a multiple of 8) |
-| 75 | bits 15-0 the width (1-2,048), bits 31-16 the height (1-2,048) (0.12; 0.10: 1,024, 2,047; 0.9: 720, 576) |
+| 75 | bits 15-0 the width (1-2,048), bits 31-16 the height (1-2,048) |
 | 76 | the stride: bytes from one line to the next (a multiple of 8, at least width x bytes a pixel) |
 | 77 | the band: bits 15-0 its first line, bits 31-16 its last (first <= last < height) |
 | 78 | reserved, 0 |
@@ -133,7 +133,7 @@ The core checks every descriptor. One it cannot use is refused -- the overlay is
 |---|---|
 | 46 | `ovl_gen` (the generation of the last descriptor the core read), `ovl_state` (0 hidden, 1 shown -- during a session -- 2 refused), `ovl_at` (softened for an interlaced output), `ovl_clip`, `ovl_err`, `ovl_torn`, `ovl_late` (lines the core could not read in time: shown transparent; 0 in normal use) |
 | 47 | `ar_x`, `ar_y` (the output's shape on HDMI) and `ovl_lines` (canvas lines read: a count that moves while the overlay shows) |
-| 80 | (0.10) `raster_w` x `raster_h` (the output your canvas is centred on), `raster_mode`, `raster_lb` (the picture letterboxed inside it on HDMI), `pic_x0`, `pic_y0` (the picture's rectangle's top-left; negative under Crop) |
+| 80 | `raster_w` x `raster_h` (the output your canvas is centred on), `raster_mode`, `raster_lb` (the picture letterboxed inside it on HDMI), `pic_x0`, `pic_y0` (the picture's rectangle's top-left; negative under Crop) |
 
 ## With the library
 

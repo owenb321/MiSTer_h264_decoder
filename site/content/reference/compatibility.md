@@ -5,7 +5,8 @@ Current as of: development build (no release yet).
 | | Status |
 |---|---|
 | Test pattern on HDMI and analog | Works |
-| Output signals: 480p, 480i (15 kHz, composite sync with equalizing pulses), at 59.94 or exactly 60 Hz; 576p / 576i (PAL) at 50 Hz | Work; the rate follows the stream on Auto. 576i on a real PAL CRT has not been checked yet (please report) |
+| Output signals: 480p, 480i (15 kHz, composite sync with equalizing pulses), at 59.94 or exactly 60 Hz; 576p / 576i (PAL) at 50 Hz | Work; the rate follows the stream on Auto. Checked on NTSC CRTs and through a RetroTINK; 576i has not been checked on a PAL CRT |
+| Native (HDMI): the core's signal at the video's own size, up to 2,048 pixels a side | Works on HDMI; Video Output's Auto picks it unless `MiSTer.ini` sets up an analog display ([Video output](../video/output.md)) |
 | The interface for programs (version 1.0) | Works: a program on the MiSTer plays H.264 through it ([Integrating a program](../integrating/overview.md)); frozen: a program built for 1.0 runs on every later 1.x core |
 | H.264 decoding, Main profile | Works, pictures up to 3,600 macroblocks (for example 1280x720, 720x576, 720x480, 854x480, 640x480), any aspect ratio |
 | H.264 decoding, High profile (what a stock Moonlight / Sunshine host sends): the 8x8 transform, 8x8 intra prediction, scaling matrices | Works, pictures up to 3,600 macroblocks (1280x720), 8-bit 4:2:0 |
@@ -19,12 +20,13 @@ Current as of: development build (no release yet).
 | A picture coded as separate fields (interlaced video) at a size that needs scaling | Shown with its two fields woven (moving edges can comb); at 720x480 on the Progressive output the Deinterlace setting applies as usual |
 | Interlaced video (field pictures) | Decoded; shown per the [Deinterlace](../using/settings.md) setting |
 | Low latency (game streaming: each picture shown as soon as it is decoded) | Works (a source faster than the display drops the older pictures, counted) |
-| Audio | 48 kHz 16-bit stereo PCM from the program (it decodes any codec its libraries support), played in sync with the pictures, or as it arrives for a game stream; pause and volume from the program (interface 0.5, [Audio](../integrating/audio.md)) |
+| Audio | 48 kHz 16-bit stereo PCM from the program (it decodes any codec its libraries support), played in sync with the pictures, or as it arrives for a game stream; pause and volume from the program ([Audio](../integrating/audio.md)) |
 | A stream with an occasional wrong time stamp (a lone one, up to 0.5 s off) | Shown smoothly on its normal timing; the next time stamp is always believed ([Time stamps](../integrating/interface.md#time-stamps)) |
 | The MiSTer's keyboard, mouse and gamepads (for a program such as the Moonlight client) | Passed on through the core ([Controls](../using/controls.md)) |
 | Gamepad rumble from a program (a game's rumble through the Moonlight client) | Played on the user's pad by MiSTer: two motors per pad, six pads; no trigger rumble ([Rumble](../integrating/interface.md#rumble)) |
-| Anti-twitter for interlaced CRTs | Works (an option, off by default) |
-| Colour: the stream's own matrix and range (0.16) | BT.601, BT.709 and BT.2020 (non-constant luminance), limited or full range, from the stream's tags; a stream without tags is BT.601 at standard definition and BT.709 from 1280 wide or 577 high. Not converted: the colour primaries and transfer (a BT.2020 or HDR picture shows undersaturated), and the rare GBR / YCgCo matrices (shown as untagged; counted in the status block) |
+| Anti-twitter for interlaced CRTs | Works: on Auto (the default) for game streams and the programs' own screens, or On / Off for everything |
+| Analog Dither, for the 6-bit DAC of the classic analog I/O board | Works (an option, off by default) |
+| Colour: the stream's own matrix and range | BT.601, BT.709 and BT.2020 (non-constant luminance), limited or full range, from the stream's tags; a stream without tags is BT.601 at standard definition and BT.709 from 1280 wide or 577 high. Not converted: the colour primaries and transfer (a BT.2020 or HDR picture shows undersaturated), and the rare GBR / YCgCo matrices (shown as untagged; counted in the status block) |
 | H.264 at 720x576, 25 / 50 frames/s | Real time (50 frames/s at 720x576 is the same load as 720x480 at 60) |
 | H.264 at 1280x720 (720p), 23.976-30 frames/s | Decoded and fitted to the screen on 480i, 480p and 576 (a 720p picture adds no detail on these 720-wide pictures, but plays without converting); on HDMI with Video Output **Native (HDMI)** shown at its own 1280x720, sharp on a 720p or 1080p HDMI mode. Real time for game streams (about 1.3x at a 10 Mbit/s request), and for films and transcodes with B-frames up to about 8 Mbit/s (measured: 30 frames/s at 8 Mbit/s about 1.13x, 24 frames/s at 8 Mbit/s about 1.27x); a denser encode may fall behind, its late pictures counted in the status block |
 | H.264 at 1280x720, 50 / 60 frames/s | Not real time (twice the decoder's rate): refused by the video player and the Moonlight client; decoded slowly if a program sends it anyway |
@@ -47,8 +49,8 @@ share. The core decodes the video, so the limits above apply to every file:
 |---|---|---|
 | Video | H.264 High or Main profile, 8-bit 4:2:0; up to 3,600 macroblocks a picture (1280x720, 854x480, 720x576, 720x480 and smaller, any shape) at up to 30 frames/s for 720p, 60 for 480p; progressive or field-coded interlaced. Baseline / CAVLC H.264 (phones, webcams, old iPod files) too, converted as it plays: in real time up to about 4-5 Mbit/s at 480p60 | 1080p and up; 720p at 50 / 60 frames/s; HEVC / H.265, AV1, VP8 / VP9, VC-1 / WMV9; 10-bit H.264; 4:2:2 / 4:4:4; MBAFF interlaced H.264 (most interlaced recordings); Baseline features no other profile has (slice groups, arbitrary slice order, redundant pictures) |
 | Older video (decoded by the ARM) | MPEG-1, MPEG-2 (interlaced included), MPEG-4 Part 2 (DivX, Xvid), DivX 3, WMV 7 / 8, Theora, Motion JPEG, H.263 -- up to 720x576 at up to 30 frames/s, 8-bit 4:2:0 or 4:2:2 | the same formats above 720x576 or 30 frames/s (the ARM's budget: one core, with the picture's copy into the core); 4:4:4 or 10-bit pictures |
-| Sound | AAC, AC-3, E-AC-3, DTS (core), MP3, Opus, Vorbis, FLAC; mixed down to stereo | Dolby TrueHD (silent: pick another track), MP2, ALAC |
-| Files | `.mkv`, `.mp4`, `.m4v`, `.mov`, `.ts`, `.m2ts`, `.mts`, `.264`, `.h264` | `.avi`, `.flv`, `.mpg` / `.vob` |
+| Sound | AAC, AC-3, E-AC-3, DTS (core), MP3, MP2, Opus, Vorbis, FLAC, LPCM, WMA, ADPCM; mixed down to stereo | Dolby TrueHD (silent: pick another track), ALAC |
+| Files | `.mkv`, `.mp4`, `.m4v`, `.mov`, `.ts`, `.m2ts`, `.mts`, `.264`, `.h264`; for the older video also `.avi`, `.divx`, `.mpg`, `.mpeg`, `.vob`, `.m1v`, `.m2v`, `.wmv`, `.asf`, `.ogv`, `.3gp` | `.flv`, `.webm`, `.rmvb` |
 | Subtitles | Text: SRT, ASS / SSA (plain text, without styling), MP4 text, WebVTT, inside the file or an `.srt` beside it | Picture subtitles (DVD VobSub, Blu-ray PGS, DVB) |
 
 A raw `.264` / `.h264` stream plays without seeking, position or sound.
