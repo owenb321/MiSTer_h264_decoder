@@ -30,7 +30,7 @@ settings (Aspect Ratio, Deinterlace, ...) and **the input devices**: while a cor
 holds every keyboard, mouse and gamepad exclusively, so your program can open
 `/dev/input/event*` but receives no events from them.
 
-So **the core passes on what MiSTer's program sends it** (0.6): see [Input](#input) below.
+So **the core passes on what MiSTer's program sends it**: see [Input](#input) below.
 
 - The menu's current settings are in the status block (every option, word 27's `osd_*`), and
   so is whether the menu is open (`OSD_OPEN` in the live flags).
@@ -49,7 +49,7 @@ So **the core passes on what MiSTer's program sends it** (0.6): see [Input](#inp
 
 ## Input
 
-(0.6) The core copies what MiSTer's program sends it into control words 48 to 71, the **input
+The core copies what MiSTer's program sends it into control words 48 to 71, the **input
 region** ([The interface](interface.md#the-input-region)): six gamepads in the user's own
 MiSTer button mapping, every key, the mouse. Your program reads it; it needs no session.
 
@@ -84,7 +84,7 @@ for (;;) {                                           /* every millisecond or so 
   it should release everything it forwarded (a game-streaming client releases every key on the
   PC), and ignore key releases for keys it does not think are held (a key held across the menu
   arrives as a release with no press; so do NumLock and ScrollLock, whose presses MiSTer keeps).
-- **The menu's actions** (0.8): the core's menu has two entries for your program --
+- **The menu's actions**: the core's menu has two entries for your program --
   **Send Home to the program** (action 0: a game-streaming client presses the host's Guide /
   Home button; your pad's own Home button opens MiSTer's menu, so nothing else can) and
   **Program menu** (action 1: show your program's own menu, if it has one). Choosing one queues
@@ -104,7 +104,7 @@ for (;;) {                                           /* every millisecond or so 
   millisecond: a tap shorter than that can be missed.
 - **The mouse** is relative only, in PS/2's counts (Y up-positive); MiSTer limits a movement to
   255 counts per ~15 ms packet.
-- **Rumble** (0.13) goes the other way: your program writes each gamepad's motors and MiSTer
+- **Rumble** goes the other way: your program writes each gamepad's motors and MiSTer
   plays them on the user's pad ([Rumble](interface.md#rumble), `h264ring_rumble()`).
 - `h264stat --input --watch 0.05` prints the region and every event as it arrives.
 
@@ -113,5 +113,5 @@ for (;;) {                                           /* every millisecond or so 
 A program that needs its own screens (a media browser, a settings page, subtitles) draws them
 into the Linux framebuffer (`/dev/fb0`) with ordinary fbdev or SDL code, and the core
 composites them over the video on its own output -- HDMI and the analog outputs alike, CRTs
-included (0.9). The canvas, the pixel formats, transparency and page flipping:
+included. The canvas, the pixel formats, transparency and page flipping:
 [Your own screens: the overlay](overlay.md).

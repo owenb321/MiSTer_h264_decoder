@@ -19,41 +19,41 @@ High), and more at ordinary rates.
 
 ## The control block
 
-It holds 64-bit words. The core writes words 0 to 31, (0.5) 40 to 47 and (0.10) 80 to 87
-(its **status block**) once a video frame, and (0.6) 48 to 71 (the input region); your program writes words
-32 to 38 (39 is reserved for it) and (0.9) 72 to 79 (the overlay). Neither side ever
+It holds 64-bit words. The core writes words 0 to 31, 40 to 47 and 80 to 87
+(its **status block**) once a video frame, and 48 to 71 (the input region); your program writes words
+32 to 38 (39 is reserved for it) and 72 to 79 (the overlay). Neither side ever
 writes the other's words.
 
 | word | contents |
 |---|---|
 | 0 | the magic `"MiSTH264"` |
-| 1 | the interface version (major x 256 + minor); (0.5) where the second status region starts (40) |
+| 1 | the interface version (major x 256 + minor); where the second status region starts (40) |
 | 2 | the ring's address and size |
 | 3 | a sequence number that advances every frame (the **heartbeat**) |
 | 4 | the state, the error code, live flags, the menu's settings, the error's position |
-| 5 | the **read index** (0.5: held behind audio not yet played -- see [Indices](#indices)) and the **acknowledged nonce** |
+| 5 | the **read index** (held behind audio not yet played -- see [Indices](#indices)) and the **acknowledged nonce** |
 | 6 | the header of the record that caused an error |
 | 7 | the presentation clock (90 kHz) |
-| 8-29 | counters: records, pictures decoded and shown, errors, refusals, skips, lateness; and (0.4, word 27) **every menu setting's value** (`osd_*` in `h264ring_layout.h`: Aspect Ratio, Deinterlace, Video Output, HDMI Deinterlace, Analog Aspect, Refresh Rate, Anti-Twitter) and `gfx_mismatch`; (0.7, word 27) `disp_lone` -- see [Time stamps](#time-stamps) |
-| 30 | how the shown picture is fitted to the screen: its rectangle's width and height on the raster (720x480, or 720x576 at 50 Hz), whether it is shown 1:1 (snapped), whether its crop was invalid (ignored) or its rectangle clamped, and the lines the display could not fetch in time (0 in normal use); and (0.3) the signal the core is generating: its rate (`raster_std`: 59.94 Hz, 60.00 Hz, or 50 Hz with 576 lines), whether it is interlaced, whether the user's Refresh Rate is Auto (the rate then follows your stream's VUI rate, chosen at its first picture), and whether anti-twitter filters the shown picture. (0.17) `fit_valid` (bit 45): a picture is shown; while it is 0 (no picture yet, or after a flush) the fit's fields here and word 80's `pic_x0` / `pic_y0` read 0 |
+| 8-29 | counters: records, pictures decoded and shown, errors, refusals, skips, lateness; and (word 27) **every menu setting's value** (`osd_*` in `h264ring_layout.h`: Aspect Ratio, Deinterlace, Video Output, HDMI Deinterlace, Analog Aspect, Refresh Rate, Anti-Twitter) and `gfx_mismatch`; (word 27) `disp_lone` -- see [Time stamps](#time-stamps) |
+| 30 | how the shown picture is fitted to the screen: its rectangle's width and height on the raster (720x480, or 720x576 at 50 Hz), whether it is shown 1:1 (snapped), whether its crop was invalid (ignored) or its rectangle clamped, and the lines the display could not fetch in time (0 in normal use); and the signal the core is generating: its rate (`raster_std`: 59.94 Hz, 60.00 Hz, or 50 Hz with 576 lines), whether it is interlaced, whether the user's Refresh Rate is Auto (the rate then follows your stream's VUI rate, chosen at its first picture), and whether anti-twitter filters the shown picture. `fit_valid` (bit 45): a picture is shown; while it is 0 (no picture yet, or after a flush) the fit's fields here and word 80's `pic_x0` / `pic_y0` read 0 |
 | 31 | the sequence number again |
 | 32 | **your write index** |
 | 33 | **your session nonce** |
-| 34 | (0.5) **your pause and volume** -- see [Pausing](#pausing) |
-| 35 | (0.4) **your settings request** -- see [Changing the settings](#changing-the-settings) |
-| 36-38 | (0.13) **your rumble for the gamepads** -- see [Rumble](#rumble) |
+| 34 | **your pause and volume** -- see [Pausing](#pausing) |
+| 35 | **your settings request** -- see [Changing the settings](#changing-the-settings) |
+| 36-38 | **your rumble for the gamepads** -- see [Rumble](#rumble) |
 | 39 | reserved for your program (write 0) |
-| 40-45 | (0.5) **the audio**: its state (idle, waiting to start, playing) and mode (paced or low latency), the queue (records and frames), frames played, silence played for gaps, frames dropped late, underruns, low-latency drops and repeats, how often the audio started the clock, the A/V offset (the clock minus the last timed record's time, 90 kHz), the ring bytes the audio holds; and the pause word as applied (`paused`, `atten`, `ctl_err`). The fields are `aud_*`, `paused`, `ctl_err`, `atten` in `h264ring_layout.h` |
-| 46-47 | (0.9) **the overlay's status**: the descriptor read last, shown / hidden / refused and why, and the output's shape on HDMI -- see [Your own screens](overlay.md#the-status) |
-| 48-71 | (0.6) **the input region**: MiSTer's gamepads, keys and mouse -- see [The input region](#the-input-region) |
-| 72-79 | (0.9) **your overlay's descriptor**: a page of the Linux framebuffer composited over the video -- see [Your own screens](overlay.md) |
-| 80 | (0.10) **the raster**: the size of the core's output picture area (720 x 480, or 720 x 576 at 50 Hz; with Video Output on Native (HDMI) the video's own size, up to 2,048 x 2,048), its mode (fitted, native, or native but this picture shown fitted), whether it is shown at the HDMI display's shape with the picture letterboxed or pillarboxed inside, and where the picture's rectangle sits on it -- see [Your own screens](overlay.md#the-canvas). (0.14) `video_out`: Video Output as the core resolved it -- 1 Interlaced, 2 Progressive, 3 Native (HDMI); the menu's Auto is one of them (Native on an HDMI-only MiSTer), so read this, not the menu's value in word 27, to know whether the picture is shown at its own pixels (`h264ring_video_out()`). (0.16) `colour` (bits 29-31): the shown picture's colour code, 1-6 ([The colour](#records)) |
-| 81 | (0.11) **what the core can play** (constants): `cap_max_mbs`, the largest picture in macroblocks (3,600: 1280x720 -- a larger one's slices are dropped and counted in word 20's `rc_ref_size`); `cap_mb_rate`, the macroblocks a second the core is designed for (108,000: 1280x720 at 30, 854x480 at 60 -- real time below it also depends on the bitrate, see [Compatibility](../reference/compatibility.md)); `cap_native_h`, the tallest 16:9 picture Video Output's Native (HDMI) shows at its own size (720 since 0.12; 480 at 0.11). Read them with `h264ring_caps()` instead of hard-coding them |
-| 82-83 | (0.13) **the rumble passed to MiSTer**: each gamepad's value now (`rum_p0` to `rum_p5`; 0 when no session is open) and `rum_changes`, how many times it changed -- see [Rumble](#rumble) |
-| 84 | (0.15) **the picture stores**: `pic_held` (bits 0-19: the stores the display holds), `pic_mode` (20: the stream is pictures of yours), `cap_pic_stores` (24-31: 20), `pic_emitted` (32-63: PICTURE records taken since the core started) -- see [Pictures you decode](pictures.md#the-store-rule) |
-| 85 | (0.15) `disp_fhold`: at 480i / 576i, field pairs held one field so that each starts on its first field's raster field -- one a stream start or a field-order change is normal; one every pair means the stream's timing sits a field off the raster (after a pause, or a 3-field frame): the fields still play in order, one field behind the sound |
-| 86 | (0.16) **the colour**: the shown picture's colour description as its stream coded it -- `vui_matrix` (bits 0-7), `vui_primaries` (8-15), `vui_transfer` (16-23), `vui_full_range` (24), `vui_colour_present` (25; 2 / 2 / 2 / 0 / 0 when the stream has none, and for your own pictures) --, `colour_override` (26: your stream's first access unit set a non-zero code), `colour_unsup` (32-47: pictures shown by the size rule because their matrix is one the core does not convert -- GBR, YCgCo, BT.2020 constant luminance, or a newer one) and `colour_mismatch` (48-63: access units whose code differed from the stream's first), both since the stream began. The code in use is word 80's `colour` |
-| 87 | (0.10) reserved (0) |
+| 40-45 | **the audio**: its state (idle, waiting to start, playing) and mode (paced or low latency), the queue (records and frames), frames played, silence played for gaps, frames dropped late, underruns, low-latency drops and repeats, how often the audio started the clock, the A/V offset (the clock minus the last timed record's time, 90 kHz), the ring bytes the audio holds; and the pause word as applied (`paused`, `atten`, `ctl_err`). The fields are `aud_*`, `paused`, `ctl_err`, `atten` in `h264ring_layout.h` |
+| 46-47 | **the overlay's status**: the descriptor read last, shown / hidden / refused and why, and the output's shape on HDMI -- see [Your own screens](overlay.md#the-status) |
+| 48-71 | **the input region**: MiSTer's gamepads, keys and mouse -- see [The input region](#the-input-region) |
+| 72-79 | **your overlay's descriptor**: a page of the Linux framebuffer composited over the video -- see [Your own screens](overlay.md) |
+| 80 | **the raster**: the size of the core's output picture area (720 x 480, or 720 x 576 at 50 Hz; with Video Output on Native (HDMI) the video's own size, up to 2,048 x 2,048), its mode (fitted, native, or native but this picture shown fitted), whether it is shown at the HDMI display's shape with the picture letterboxed or pillarboxed inside, and where the picture's rectangle sits on it -- see [Your own screens](overlay.md#the-canvas). `video_out`: Video Output as the core resolved it -- 1 Interlaced, 2 Progressive, 3 Native (HDMI); the menu's Auto is one of them (Native on an HDMI-only MiSTer), so read this, not the menu's value in word 27, to know whether the picture is shown at its own pixels (`h264ring_video_out()`). `colour` (bits 29-31): the shown picture's colour code, 1-6 ([The colour](#records)) |
+| 81 | **what the core can play** (constants): `cap_max_mbs`, the largest picture in macroblocks (3,600: 1280x720 -- a larger one's slices are dropped and counted in word 20's `rc_ref_size`); `cap_mb_rate`, the macroblocks a second the core is designed for (108,000: 1280x720 at 30, 854x480 at 60 -- real time below it also depends on the bitrate, see [Compatibility](../reference/compatibility.md)); `cap_native_h`, the tallest 16:9 picture Video Output's Native (HDMI) shows at its own size (720). Read them with `h264ring_caps()` instead of hard-coding them |
+| 82-83 | **the rumble passed to MiSTer**: each gamepad's value now (`rum_p0` to `rum_p5`; 0 when no session is open) and `rum_changes`, how many times it changed -- see [Rumble](#rumble) |
+| 84 | **the picture stores**: `pic_held` (bits 0-19: the stores the display holds), `pic_mode` (20: the stream is pictures of yours), `cap_pic_stores` (24-31: 20), `pic_emitted` (32-63: PICTURE records taken since the core started) -- see [Pictures you decode](pictures.md#the-store-rule) |
+| 85 | `disp_fhold`: at 480i / 576i, field pairs held one field so that each starts on its first field's raster field -- one a stream start or a field-order change is normal; one every pair means the stream's timing sits a field off the raster (after a pause, or a 3-field frame): the fields still play in order, one field behind the sound |
+| 86 | **the colour**: the shown picture's colour description as its stream coded it -- `vui_matrix` (bits 0-7), `vui_primaries` (8-15), `vui_transfer` (16-23), `vui_full_range` (24), `vui_colour_present` (25; 2 / 2 / 2 / 0 / 0 when the stream has none, and for your own pictures) --, `colour_override` (26: your stream's first access unit set a non-zero code), `colour_unsup` (32-47: pictures shown by the size rule because their matrix is one the core does not convert -- GBR, YCgCo, BT.2020 constant luminance, or a newer one) and `colour_mismatch` (48-63: access units whose code differed from the stream's first), both since the stream began. The code in use is word 80's `colour` |
+| 87 | reserved (0) |
 
 A consistent copy of the status block: read word 31, then the words you need, then word
 3; if the two sequence numbers differ, the core was writing -- read again. (The core writes
@@ -65,7 +65,7 @@ refused something you wrote: the error code says what).
 
 ## The input region
 
-(0.6) Words 48 to 71 carry what MiSTer's program sends the core: while a core runs MiSTer
+Words 48 to 71 carry what MiSTer's program sends the core: while a core runs MiSTer
 holds every input device, so this is how your program sees them ([Input](launch.md#input)).
 The core rewrites the region when something changes -- at most once a millisecond -- and once
 a video frame regardless.
@@ -87,7 +87,7 @@ a video frame regardless.
 | 0 | a key | 9: pressed (1) or released (0); 8: the E0 prefix; 7-0: the PS/2 scan code, set 2 |
 | 1 | the mouse buttons changed | 7-0: the buttons now (as `mouse_btn`) |
 | 2 | MiSTer's menu | 0: opened (1) or closed (0) |
-| 3 | (0.8) a menu action chosen | 7-0: its number -- 0 "Send Home to the program", 1 "Program menu" ([Input](launch.md#input)) |
+| 3 | a menu action chosen | 7-0: its number -- 0 "Send Home to the program", 1 "Program menu" ([Input](launch.md#input)) |
 
 A consistent copy of the region: read word 71, then the words you need, then word 48; if the
 two differ the core was writing -- read again (`h264ring_input` does this). Keep your own
@@ -96,7 +96,7 @@ across the menu's Reset; they restart only when the core is loaded.
 
 ## Rumble
 
-(0.13) Words 36 to 38 are your program's rumble for the six gamepads; MiSTer's program plays it
+Words 36 to 38 are your program's rumble for the six gamepads; MiSTer's program plays it
 on the user's own pad (gamepad *n* of [the input region](#the-input-region) is MiSTer's player
 *n* + 1). Two gamepads to a word, in the low 32 bits (the high 32 are ignored):
 
@@ -130,7 +130,7 @@ forever: they are never reset, and they wrap at 2^32. A byte at index `i` lives 
 offset `i % 8 MB`. You may write while `write_index - read_index` stays within the ring's
 size; the read index advances as the core is done with records.
 
-(0.5) The ring is also the **audio's buffer**: an AUDIO record stays in the ring until the
+The ring is also the **audio's buffer**: an AUDIO record stays in the ring until the
 core fetches it to play, a few milliseconds before its time, and the read index stays at
 the start of the oldest such record. While audio waits to play, the read index can
 therefore lag the video you wrote; the rule above does not change.
@@ -145,9 +145,9 @@ tail and continue at the start.
 |---|---|
 | PAD | ignored: fills the ring's tail |
 | VIDEO_AU | exactly **one complete H.264 access unit**, Annex-B (start codes included), 1 byte to 4 MB |
-| AUDIO | (0.5) PCM, 48 kHz 16-bit signed little-endian stereo, whole frames: a multiple of 4 bytes, not 0 -- see [Audio](audio.md) |
+| AUDIO | PCM, 48 kHz 16-bit signed little-endian stereo, whole frames: a multiple of 4 bytes, not 0 -- see [Audio](audio.md) |
 | CONTROL | reserved: refused in this version |
-| PICTURE | (0.15) 32 bytes: a picture you wrote into one of the core's stores -- see [Pictures you decode](pictures.md). Takes the same flags as VIDEO_AU |
+| PICTURE | 32 bytes: a picture you wrote into one of the core's stores -- see [Pictures you decode](pictures.md). Takes the same flags as VIDEO_AU |
 
 **Flags** (on VIDEO_AU; AUDIO takes only PTS_VALID):
 
@@ -162,7 +162,7 @@ tail and continue at the start.
   screen. The next access unit must carry DISCONTINUITY.
 - **LOW_LATENCY** -- show each picture as soon as it is decoded (game streaming). Taken from
   each stream's first access unit.
-- **GRAPHICS** (0.4) -- this stream is rendered graphics: a game stream, a desktop, an
+- **GRAPHICS** -- this stream is rendered graphics: a game stream, a desktop, an
   interface -- not camera or film video. It tells the core what the content IS; the user's
   settings decide what to do with it: with **Anti-Twitter** on Auto (the default) the core
   filters a GRAPHICS stream on an interlaced (15 kHz) output, where one-line detail such as
@@ -171,7 +171,7 @@ tail and continue at the start.
   every one); an access unit that disagrees is counted (`gfx_mismatch`) and changes nothing.
   The live flags show the stream's value.
 
-**The colour** (0.16) -- a 3-bit code in the header (word 1, bits 33-35), on VIDEO_AU and PICTURE
+**The colour** -- a 3-bit code in the header (word 1, bits 33-35), on VIDEO_AU and PICTURE
 only: which matrix and range the core converts the pictures with. **0, auto, is right for almost
 every program**: the core reads the stream's own colour tags (the SPS's VUI), and a stream without
 them is BT.601 when it is standard definition and BT.709 when it is at least 1,280 wide or more
@@ -256,7 +256,7 @@ aspect=2,refresh_rate=2` from the command line).
 
 ## Time stamps
 
-(0.7) A VIDEO_AU's presentation time is believed, with one exception: a **lone** time stamp --
+A VIDEO_AU's presentation time is believed, with one exception: a **lone** time stamp --
 more than half a refresh (about 8 ms) and at most 0.5 s away from where the pictures before it
 say it should be, ahead or behind, when the one before it was believed -- is taken as a mistake
 and the picture is shown on the running timeline. The next time stamp is always believed, so a
@@ -267,7 +267,7 @@ never meets the rule.
 
 ## Pausing
 
-(0.5) **Word 34** is your pause and volume, one 32-bit store (the library's
+**Word 34** is your pause and volume, one 32-bit store (the library's
 `h264ring_set_pause()` and `h264ring_set_atten()`):
 
 | bits | field |
@@ -295,21 +295,21 @@ code, its position and the offending header; a new session clears it.
 |---|---|
 | 1 | the write index is not a multiple of 16 |
 | 2 | the write index moved backwards, or more than a ring ahead of the read index |
-| 3 | a header's sync pattern or reserved bits are wrong (0.16: bits 36-47 of word 1; 33-35 are the colour) |
+| 3 | a header's sync pattern or reserved bits are wrong (bits 36-47 of word 1; 33-35 are the colour) |
 | 4 | an unknown record type (or an unwritten header) |
 | 5 | a flag that is not defined, or not allowed on that type |
-| 6 | a payload length out of range (an empty access unit; an AUDIO record of 0 bytes or not a multiple of 4; (0.15) a PICTURE not of 32 bytes; anything over 4 MB) |
+| 6 | a payload length out of range (an empty access unit; an AUDIO record of 0 bytes or not a multiple of 4; a PICTURE not of 32 bytes; anything over 4 MB) |
 | 7 | a record crossing the ring's end, or a PAD that does not end there |
 | 8 | a record out of sequence |
 | 9 | an access unit (or a PICTURE) after END_OF_STREAM without DISCONTINUITY |
 | 10 | a CONTROL record (reserved) |
-| 11 | (0.15) a PICTURE in a stream of access units, or an access unit in a stream of pictures |
-| 12 | (0.15) a PICTURE's field out of range: a reserved bit, structure 3, a `pic_struct` not allowed, an `aspect_ratio_idc` of 17-254 (or 255 with a zero SAR), timing with a zero field |
-| 13 | (0.15) a PICTURE's store past 19 |
-| 14 | (0.15) a PICTURE's size: a side of 0 or past 128 macroblocks, an odd height for a field pair, or more than 3,600 macroblocks |
-| 15 | (0.15) a PICTURE's crop that leaves nothing |
-| 16 | (0.15) a PICTURE naming a store the display still holds (the store rule broken) |
-| 17 | (0.16) a record's colour code is 7, or not 0 on a PAD or an AUDIO record |
+| 11 | a PICTURE in a stream of access units, or an access unit in a stream of pictures |
+| 12 | a PICTURE's field out of range: a reserved bit, structure 3, a `pic_struct` not allowed, an `aspect_ratio_idc` of 17-254 (or 255 with a zero SAR), timing with a zero field |
+| 13 | a PICTURE's store past 19 |
+| 14 | a PICTURE's size: a side of 0 or past 128 macroblocks, an odd height for a field pair, or more than 3,600 macroblocks |
+| 15 | a PICTURE's crop that leaves nothing |
+| 16 | a PICTURE naming a store the display still holds (the store rule broken) |
+| 17 | a record's colour code is 7, or not 0 on a PAD or an AUDIO record |
 
 ## Writing safely from Linux
 
@@ -321,8 +321,7 @@ does all of this.
 ## Versions
 
 Word 1's low 16 bits hold the interface version, major x 256 + minor: `0x0100` is 1.0. This
-manual describes 1.0. Marks such as (0.5) or (0.15) say in which version before 1.0 a word, a
-field or a record type arrived; every one of them is part of 1.0.
+manual describes 1.0.
 
 **Within 1.x the interface only grows.** A later minor version (1.1, 1.2, ...) never moves a
 word or a field, never changes what a value means, and never makes a field your program writes
@@ -350,109 +349,4 @@ A change that cannot be made that way is a new major version (2.0), never a sile
 
 ## Version history
 
-- **1.0** -- **The interface frozen**: the layout of 0.17, unchanged, with the rules above. The
-  library now accepts a core of the same major and a minor at least its own (below 1.0 it
-  checked the version exactly), and `h264ring_version_ok()` states the rule. Rebuild against
-  the new headers; a program built for 1.0 keeps working on every later 1.x core.
-
-- **0.17** -- **The fit word with no picture**: word 30's `fit_valid` (bit 45) says a picture is shown;
-  until then the fit's fields (`fit_crop_bad`, `fit_clamp`, `fit_snap`, `fit_ow`, `fit_oh`) and word 80's
-  `pic_x0` / `pic_y0` read 0 -- 0.16 reported a 0 x 0 picture's fit (flags set, `fit_oh` 8,191) on the
-  ready screen. Nothing moved. Rebuild against the new headers.
-
-- **0.16** -- **The colour**: the core converts each picture with its stream's own matrix and range
-  (BT.601, BT.709 or BT.2020; limited or full) instead of BT.601 limited always; an untagged stream
-  is BT.601 for standard definition and BT.709 from 1,280 wide or 577 high. A 3-bit code in header
-  word 1 (bits 33-35, which had to be 0) lets a program override it; error 17; word 80's `colour`, word
-  86. The library: `h264ring_set_colour()`, `struct h264ring_picture`'s `colour` (with a full-range code
-  `h264ring_picture_copy()` keeps a full-range source as it is: no conversion on the ARM). **A program
-  that writes 0 behaves as before** for every untagged SD stream; a tagged or HD stream now shows its
-  own colours. Rebuild against the new headers; a positional initializer of `struct h264ring_picture`
-  needs one more value (0).
-
-- **0.15** -- **Pictures you decode yourself**: record type 5, PICTURE, names a picture your
-  program wrote into one of the core's picture stores; the core shows it as a decoded picture
-  ([Pictures you decode](pictures.md)). Status word 84 (the stores' state), errors 11-16, the stores'
-  address in `h264ring_layout.h`. The library: `H264RING_OPEN_PICTURES`, `h264ring_picture_*`,
-  `h264ring_write_picture()`. Nothing moved. Rebuild against the new `h264ring_layout.h`.
-
-- **0.14** -- **Video Output as resolved**: word 80's `video_out` (bits 27-28, which read 0
-  before) reports the output the core makes: Interlaced, Progressive or Native (HDMI). The menu's
-  **Auto now chooses Native (HDMI)** unless `MiSTer.ini` sets up an analog TV (Interlaced) or a
-  31 kHz VGA monitor (Progressive), so the menu's value (word 27) no longer says whether the
-  picture is shown at its own pixels: read `video_out`. The library: `h264ring_video_out()`,
-  which falls back to the menu's value on an older core. Nothing moved. Rebuild against the new
-  `h264ring_layout.h` (the version is checked at attach).
-- **0.13** -- **rumble**: program words **36-38** carry each gamepad's rumble (two motors, 0-255;
-  see [Rumble](#rumble)), read with every poll and passed to MiSTer's program during a session;
-  core words **82-83** report what is passed on (`rum_p0` to `rum_p5`, `rum_changes`). Words 36-37
-  were reserved for rumble since 0.6, 38 for your program, 82-83 for the core; nothing moved. The
-  library: `h264ring_rumble()`, `h264ring_rumble_keepalive()`. Rebuild against the new
-  `h264ring_layout.h` (the version is checked at attach).
-- **0.12** -- **the HD raster**: Video Output's Native (HDMI) shows every picture the core plays at
-  its own pixels, 1280x720 included (word 80's `raster_w` / `raster_h` up to 2,048 x 2,048), so
-  word 81's `cap_native_h` is **720** (it was 480). The overlay's canvas may be up to **2,048 x
-  2,048** (`H264RING_OVL_MAX_W` / `_H`; it was 1,024 x 2,047). No word moved: a program that
-  takes the limits from the header and word 81 follows. Rebuild against the new
-  `h264ring_layout.h` (the version is checked at attach).
-- **0.11** -- **what the core can play**: core word **81** reports the largest picture
-  (`cap_max_mbs`, 3,600 macroblocks: 1280x720 -- it was 1,620), the macroblock rate the core
-  is designed for (`cap_mb_rate`, 108,000 a second) and the tallest 16:9 picture Native (HDMI)
-  shows at its own size (`cap_native_h`, 480). Word 20's `rc_ref_size` now counts pictures above
-  3,600 macroblocks. Additive: a word that read 0. The library: `h264ring_caps()`. Check a file's
-  size and rate against these before sending it (the video player refuses a 720p60 file as too
-  fast). Rebuild against the new `h264ring_layout.h` (the version is checked at attach).
-
-- **0.10** -- **the raster**: core word **80** reports the output's picture area (`raster_w`,
-  `raster_h`), its mode, `raster_lb` and the shown picture's rectangle on it (`pic_x0`,
-  `pic_y0`, with word 30's `fit_ow` x `fit_oh`), written as a sixth burst under the same
-  sequence number (words 81-87 reserved). On HDMI with the Progressive output and Analog
-  Aspect on Auto, a picture **wider than the display** (a 2.39:1 film on 16:9) is now
-  letterboxed inside the output and HDMI is given the display's shape, so the whole output
-  -- your overlay included -- covers the screen and the bars are yours to draw in; word 47
-  then reads the display's shape. Words 47 and 30 kept their places; nothing moved. The
-  library: `h264ring_raster()`. Rebuild against the new `h264ring_layout.h` (the version is
-  checked at attach).
-
-- **0.9** -- **the overlay plane**: program words **72-79** describe a page of the Linux
-  framebuffer (its address, size, stride, format `1555` / `4444` / `8888`, the band of lines
-  drawn on) under a generation pair; the core composites it over the video on HDMI and analog
-  alike ([Your own screens](overlay.md)). Core words **46-47** report it (`ovl_*`) and the
-  output's shape on HDMI (`ar_x`, `ar_y`). Added in words that were reserved or unused;
-  nothing moved. The library: `h264ring_overlay_show`, `_hide`, `_wait`, `_check`,
-  `h264ring_fb_map`. Rebuild against the new `h264ring_layout.h`.
-
-- **0.8** -- event type **3, a menu action**: the core's menu has two entries a program acts on
-  ("Send Home to the program", "Program menu"); choosing one queues the event (before the menu's
-  closing). Type 3 was reserved; nothing moved. `H264RING_EV_ACTION`, `H264RING_IN_ACTIONS`.
-  Rebuild against the new `h264ring_layout.h`.
-- **0.7** -- word 27 [30:27] **`disp_lone`**: the lone time stamps the display disbelieved (see
-  [Time stamps](#time-stamps); saturating at 15). Added in bits that were zero; nothing moved.
-  Rebuild against the new `h264ring_layout.h`.
-- **0.6** -- **input**: words **48-71**, the input region -- MiSTer's six gamepads (the core's
-  Xbox-style pad and both sticks), every key (PS/2 set 2) and mouse-button change and the menu's
-  opening and closing as one ordered queue of 32 events, the mouse's movement as running sums;
-  rewritten on change (at most every millisecond) and each frame, with its own sequence numbers
-  (words 48 and 71). Program words 36-37 reserved for rumble. Added only; nothing below word 48
-  moved. The library: `h264ring_input`, `h264ring_input_events`. Rebuild against the new
-  `h264ring_layout.h`.
-- **0.5** -- **audio**: AUDIO records are played (PCM, 48 kHz 16-bit stereo; their length a
-  multiple of 4, else error 6); the ring is the audio's buffer, so the **read index** (word
-  5) is held at the oldest audio record not yet played; **word 34, the pause and volume**;
-  words **40-47**, the audio's status, written before word 31 (word 1 names where they
-  start). The poll still reads words 32-35. Nothing below word 40 moved. Rebuild against
-  the new `h264ring_layout.h`; the library's `h264ring_status` copies words 0-47.
-- **0.4** -- the **GRAPHICS** flag (bit 4 on VIDEO_AU) and its live flag; word 27 mirrors
-  every menu setting and counts GRAPHICS disagreements; **word 35, the settings request**
-  (your program changes the menu's settings; `set_seq` / `set_err` report it). The poll now
-  reads words 32-35. Added only; nothing moved. Rebuild against the new `h264ring_layout.h`
-  (`h264play --graphics` sets the flag).
-- **0.3** -- word 30 also reports the raster: its rate, interlaced, Auto, anti-twitter
-  (added in free bits; no word or field moved). A program that knows its stream's rate can
-  read `raster_std` to see what the display runs at; under Auto, a stream whose VUI states
-  exactly 60 / 30 / 24 / 120 frames a second gets 60.00 Hz, 50 / 25 / 100 gets 50 Hz. Rebuild
-  against the new `h264ring_layout.h`.
-- **0.2** -- word 30: the fit of the shown picture (added; no word moved). The library
-  checks the version exactly while the interface is below 1.0: rebuild your program
-  against the new `h264ring_layout.h`.
-- **0.1** -- the first version.
+- **1.0** -- the first published version, frozen under the rules above.

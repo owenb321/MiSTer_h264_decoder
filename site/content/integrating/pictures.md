@@ -1,7 +1,7 @@
 # Pictures you decode yourself
 
 !!! info "Version 1.0 -- frozen"
-    Added in interface 0.15; part of the interface's definition, fixed for every 1.x core
+    Part of the interface's definition, fixed for every 1.x core
     ([Versions](interface.md#versions)). Build against the client library: it carries the
     layout and the rules below.
 
@@ -42,7 +42,7 @@ H.263 (`clients/player`, `clients/common/vdec.c` in the repository).
 The stores are outside Linux's memory, mapped uncached: copying into them runs at about 97 MB/s
 and keeps the CPU busy while it does. A 720x480 picture takes about 5.3 ms, a 1280x720 one about
 14 ms. A full-range or 4:2:2 picture (MJPEG, most webcams) costs more for its conversion: about
-8 ms at 640x480 full-range 4:2:2 -- (0.16) less with a full-range colour code, which keeps the samples
+8 ms at 640x480 full-range 4:2:2 -- less with a full-range colour code, which keeps the samples
 as they are (below). With one ARM core free (MiSTer's own program holds the other), that leaves room for
 software decoding up to DVD size at 30 frames per second; the file player stops there.
 
@@ -57,7 +57,7 @@ access unit.
 ## The store
 
 Store `k` (0 to 19) is 2 MiB at `H264RING_DPB_BYTE + k x H264RING_DPB_STORE`. A picture is planar
-8-bit 4:2:0, in the matrix and range its record's colour code says (0.16; 0, auto: BT.601 limited for a
+8-bit 4:2:0, in the matrix and range its record's colour code says (0, auto: BT.601 limited for a
 standard-definition picture, BT.709 limited from 1,280 wide or 577 high -- [The colour](interface.md#records)),
 in whole macroblocks: `W` macroblocks wide, `HF` tall (16
 lines each):
@@ -102,11 +102,11 @@ for each decoded picture:
   below). Call it on the thread that writes the ring.
 - `h264ring_picture_copy()` takes 8-bit 4:2:0 or 4:2:2, limited or full range
   (`H264RING_PIX_YUV420P`, `_YUVJ420P`, `_YUV422P`, `_YUVJ422P`): full range is converted to
-  limited -- unless (0.16) the picture's `colour` is a full-range code (`H264RING_COLOUR_601_FULL`,
+  limited -- unless the picture's `colour` is a full-range code (`H264RING_COLOUR_601_FULL`,
   `_709_FULL`, `_2020_FULL`): then the samples are kept as they are and the core converts them,
   cheaper on the ARM (a limited source with a full-range code is refused) --, 4:2:2 averaged to
   4:2:0 (within each field for a pair). It touches only the store, so any thread may call it.
-- (0.16) `struct h264ring_picture`'s `colour`: the picture's matrix and range (`H264RING_COLOUR_*`;
+- `struct h264ring_picture`'s `colour`: the picture's matrix and range (`H264RING_COLOUR_*`;
   0 auto). Set it from what your decoder reports (ffmpeg's `colorspace` and `color_range`) when it
   knows; leave 0 when it does not.
 - `h264ring_write_picture()` (and `h264ring_try_write_picture()`) sends the record, with your
