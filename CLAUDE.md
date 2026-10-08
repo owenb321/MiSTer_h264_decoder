@@ -458,7 +458,7 @@ MiSTer_h264_decoder/
 ├── docs/                      ← ENGINEERING NOTES — not published, not the manual
 ├── site/                      ← MANUAL source (content/, overrides/, README.md)
 ├── releases/                  ← built .rbf + .json manifests (gitignored, .gitkeep only)
-├── .claude/                   ← skills (release, hil-testing, docs-sweep, field-report), /merge
+├── .claude/                   ← skills (release, hil-testing, docs-sweep, field-report, integrate-stream), /merge
 └── .github/                   ← workflows (the manual's check + Pages, release packaging) + issue forms
 ```
 
