@@ -17,6 +17,26 @@ then send a small **PICTURE** record naming the store. The core's display takes 
 The bundled file player does this for MPEG-1/2, DivX / Xvid, WMV 7/8, Theora, Motion JPEG and
 H.263 (`clients/player`, `clients/common/vdec.c` in the repository).
 
+## Limits
+
+- **In practice: standard definition, up to 30 frames per second.** The limit is the ARM, not the
+  core. Your program has one A9 core (MiSTer's own program holds the other), and that core both
+  decodes and copies: the copy into the stores alone takes about 5.3 ms for a 720x480 picture and
+  14 ms for a 1280x720 one ([What it costs](#what-it-costs)). The bundled player measured nine codecs
+  playing standard-definition files in real time at 13-75 % of the core. At 1280x720 the copy alone
+  takes about 42 % of the core at 30 frames per second, before any decoding: the interface accepts
+  720p pictures, but a software decoder on the ARM does not keep up. A stream the ARM cannot keep
+  up with plays behind, as any decoder that falls behind does.
+- **The format: planar 8-bit 4:2:0** in the store. The library's copy also takes 8-bit 4:2:2 and
+  full-range (`yuvj`) pictures and converts them as it copies, at a cost. Anything else -- 10-bit,
+  4:4:4, RGB, packed formats -- your program converts first, on the same core.
+- **The size: up to 3,600 macroblocks** (1280x720, 720x576 and smaller, any shape) **and 2,048
+  pixels a side** -- the same bound as the core's own decoding.
+- **One kind per stream:** a stream is your pictures or H.264 access units, never both
+  ([below](#a-stream-is-pictures-or-access-units)).
+- **20 stores:** a store stays the core's while its picture is queued or on screen; when every one
+  is, `h264ring_picture_acquire` returns `-EAGAIN` and you wait.
+
 ## What it costs
 
 The stores are outside Linux's memory, mapped uncached: copying into them runs at about 97 MB/s

@@ -38,7 +38,7 @@ Each one starts from MiSTer's **Scripts** menu and is driven with the gamepad.
 | | |
 |---|---|
 | **Video** | H.264 High or Main profile, 8-bit 4:2:0, any size up to 1280x720. Real time at **854x480 / 720x480, 60 frames/s** (a 10 Mbit/s game stream) and **1280x720, 30 frames/s** (game streams, films and transcodes up to about 8 Mbit/s). CAVLC streams are rewritten on the ARM, up to about 4-5 Mbit/s. |
-| **Pictures you decode** | Any format the ARM can decode in time (standard definition), handed over as raw pictures and presented exactly like decoded H.264. |
+| **Pictures you decode** | Any format the program decodes on the ARM itself, handed over as raw 8-bit 4:2:0 (or 4:2:2) pictures and presented exactly like decoded H.264. **In practice standard definition (up to 720x576) at up to 30 frames/s**: the ARM has one free core, and copying a picture into the core's memory alone takes about 5 ms at 720x480 (14 ms at 1280x720), so software decoding does not keep up at 720p. See [the limits](site/content/integrating/pictures.md#limits). |
 | **Audio** | 48 kHz 16-bit stereo PCM, played against the same clock as the pictures; pause and volume. |
 | **Output** | 480i, 576i, 480p, 576p and HDMI at the picture's own size. 59.94, exactly 60.00, or 50 Hz, chosen from the stream. The picture's colour (BT.601 / 709 / 2020) honoured. |
 | **Your own screens** | A program draws menus, subtitles or a progress bar into the Linux framebuffer; the core composites them over the video on HDMI and analog alike. |
