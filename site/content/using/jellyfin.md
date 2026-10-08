@@ -6,7 +6,7 @@ CRT included, with their sound and subtitles. You pick what to watch in any Jell
 your phone, in a web browser) and play it on the MiSTer, the way you would play it on a TV.
 
 !!! warning "Early"
-    The client is new. It has no menu of its own to browse your library yet: you choose what
+    The client is new. It has no menu of its own to browse your library: you choose what
     to play in another Jellyfin app, and the MiSTer plays it. Stereo sound.
 
 ## What plays
