@@ -597,6 +597,12 @@ build the clients (their image is local): settled before the first release (road
 
 ## Source control
 
+**Support stance (decided 2026-10-08, the maintainer): a proof of concept, not supported.** No help
+with setups, no fixes on request, no promised features; others are encouraged to fork it and do
+whatever they want with it. Said in the README (its callout and "Status"), the manual's home page and
+"Reporting a bug", and the issue chooser (`.github/ISSUE_TEMPLATE/config.yml`). Never write a support
+promise ("please report", "we will fix") into a user-facing page.
+
 **Hosting: GitHub** (`github.com/owenb321/MiSTer_h264_decoder`; private while it is staged,
 public with the first release). The Forgejo repository holds the bring-up history (PRs fj#1 to
 fj#45) and is not imported. Write everything as if it were public already (below).

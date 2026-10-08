@@ -2,6 +2,13 @@
 
 **Video and sound from a program on the MiSTer, shown on a CRT or an HDMI display, in sync.**
 
+> [!IMPORTANT]
+> **This is a proof of concept, and it is not supported.** It works -- everything described below
+> runs on real hardware -- but it is offered as it is: no help with setups, no fixes on request,
+> no promised features. **You are encouraged to fork it** and do whatever you want with it: take
+> the decoder, the interface or the programs in any direction and publish your own builds. The
+> licences (GPL-3.0-or-later for the core, MIT for the client library) allow exactly that.
+
 The MiSTer's ARM processor runs Linux and can do everything a media player does -- networking,
 streaming protocols, containers, subtitles -- except decode modern video fast enough. This core
 gives it an FPGA that can. A program on the ARM hands the core **H.264 video** (or pictures it
@@ -64,9 +71,20 @@ is a complete reference player.
 
 ## Status
 
-**Pre-release.** The first release will be 1.0. Everything above runs on the hardware (a
-DE10-Nano, tested over HDMI, on CRTs and through a RetroTINK). The Jellyfin client, the video
-player and the camera viewer are early.
+**A proof of concept, offered as is.** Everything above runs on the hardware (a DE10-Nano,
+tested over HDMI, on CRTs and through a RetroTINK); the Jellyfin client, the video player and the
+camera viewer are early. **No support is provided**: issues and pull requests may go unanswered,
+and nothing here is a promise of future work. A first release, 1.0, packages what is here.
+
+**If you fork it**, these are the places to start:
+
+- [`docs/roadmap.md`](docs/roadmap.md) -- what was decided, built and measured, and the ideas
+  left unbuilt;
+- [`docs/`](docs/) -- why each part is designed the way it is, with the measurements behind it;
+- [`bench/h264/`](bench/h264/) -- the simulation benches (`run_*.sh`; `--red` proves each one can
+  fail), and [`tools/mister.py`](tools/mister.py), which drives a real MiSTer over ssh for
+  hardware tests;
+- [`CLAUDE.md`](CLAUDE.md) -- the project's working rules and the lessons behind them.
 
 ## Building
 
