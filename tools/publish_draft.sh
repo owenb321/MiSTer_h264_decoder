@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ⚠ package.yml, which this dispatches, cannot yet build the HPS clients (see its header):
-#   settled before the first release (docs/roadmap.md Phase 7).
+# package.yml, which this dispatches, also builds the HPS clients from the manifest's commit
+# (clients.yml) and packages them in the zip.
 # publish_draft.sh — create the GitHub release DRAFT for a built core and kick the
 # packaging workflow, in one step.
 #

@@ -590,8 +590,8 @@ reserved (1.0 = the interface frozen). Judge against the whole unreleased delta 
 same day); never a release.
 
 Publishing: the `release` skill -- a GitHub release draft (`tools/publish_draft.sh`), packaged
-by `.github/workflows/package.yml`, smoke-tested, then published. ⚠ `package.yml` cannot yet
-build the clients (their image is local): settled before the first release (roadmap Phase 7).
+by `.github/workflows/package.yml` (which builds the HPS clients from the release commit through
+`clients.yml`), smoke-tested, then published.
 
 ---
 

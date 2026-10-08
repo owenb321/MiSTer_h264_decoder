@@ -951,18 +951,20 @@ great in Native, much worse in Progressive (`analog.md` §11). Found: the host's
       interface 0.16; ✅ MERGED (PR fj#41)), F4 the STC as the program's clock, F5 the fit's flags before any picture -- interface 0.17, word
       30's `fit_valid`, on .201 2026-10-07: `history.md` §40; ✅ MERGED (PR fj#42)). F1 / F4 left to later additive minors
       (no client needs them).
-- [ ] **The move to GitHub** (decided 2026-10-06, the maintainer: a fresh history, as MiSTer_DVD's;
-      CLAUDE.md "Source control"). Done on `docs/pre-public`: Forgejo-era references written `fj#NN`
-      (CLAUDE.md "Historical `fj#NN` references"), `NOTICE` for `clients/common`, `player`, `uvc`, the
-      manual's stale overlay section, the README, the camera viewer in `tools/package_release.sh`.
-      D5 decided: the name stays "H264". Done on `chore/github-move` (2026-10-08): `tea` -> `gh` (CLAUDE.md
-      "Source control", the `/merge` command's note, the `release` and `field-report` skills, the workflows'
-      "inactive" headers, `publish_draft.sh`, `mkdocs.yml`, `site/README.md`); the tree swept for personal
-      data (no personal e-mail address, host or path in any tracked file). The repository created on GitHub
-      (private, staged). Left: the import commit, with this repository's `user.email` the GitHub noreply
-      address; GitHub Pages (needs the repository public); `package.yml` packages the clients (it runs `package_release.sh` with none built: build
-      them locally and upload them beside the `.rbf`, or build them in the workflow); MiSTer_UMD_Video
-      is private, so nothing public links it. The first release is 1.0 (above).
+- [x] ✅ **The move to GitHub -- made 2026-10-08** (decided 2026-10-06, the maintainer: a fresh history, as
+      MiSTer_DVD's; CLAUDE.md "Source control"). Before it: Forgejo-era references written `fj#NN` (CLAUDE.md
+      "Historical `fj#NN` references"), `NOTICE` for `clients/common`, `player`, `uvc`, the manual's stale overlay
+      section, the README, the camera viewer in `tools/package_release.sh` (PR fj#40); D5 decided (the name stays
+      "H264"); `tea` -> `gh` and the workflows active (PR fj#45); the tree swept for personal data (no personal
+      e-mail address, host or path in any tracked file). **The import commit `9aacaac`** ("MiSTer H264 core", no
+      parent, the tree of Forgejo's last `main`), authored and committed with the GitHub noreply address (this
+      repository's `user.email` since), pushed alone as `main` to `github.com/owenb321/MiSTer_h264_decoder`
+      (private while staged); `origin` is GitHub, the Forgejo repository the remote `forgejo` (never pushed to
+      GitHub). **The release's clients built in CI** (PR #1): `clients.yml` builds the four HPS clients in images
+      made from the repository -- a check on every PR touching `hps/` or `clients/`, and called by `package.yml`
+      with the manifest's commit, so the zip's clients are the release commit's. Left for going public, with the
+      first release (1.0, above): the repository's visibility, Settings -> Pages -> Source "GitHub Actions".
+      MiSTer_UMD_Video is private, so nothing public links it.
 - [x] Example integrations: a Moonlight client fork (PR fj#13), the Jellyfin client (PR fj#24) and the file player
       (PR fj#27), below. **A Plex client is dropped** (the maintainer, 2026-10-04: "I'm content with Jellyfin");
       the core stays service-neutral, and a Plex client remains something an integrator could write against the
