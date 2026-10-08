@@ -13,7 +13,7 @@ repo=$(cd "$here/../.." && pwd)
 if [ "${USE_DOCKER:-0}" = 1 ] && [ -z "${IN_JF_DOCKER:-}" ]; then
   base=${HPS_DOCKER_IMAGE:-mister-h264-hps:gcc-arm-10.2}
   ml=${ML_DOCKER_IMAGE:-mister-h264-moonlight:deps1}
-  image=${CLIENTS_DOCKER_IMAGE:-mister-h264-clients:deps2}
+  image=${CLIENTS_DOCKER_IMAGE:-mister-h264-clients:deps3}   # the image clients/common/docker builds today (as the player's)
   docker image inspect "$base" >/dev/null 2>&1 || docker build -t "$base" "$repo/hps/docker"
   docker image inspect "$ml" >/dev/null 2>&1 ||
     docker build --build-arg BASE="$base" -t "$ml" "$repo/clients/moonlight/docker"

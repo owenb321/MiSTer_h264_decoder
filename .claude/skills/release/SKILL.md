@@ -6,9 +6,10 @@ description: Cut and publish a release of the MiSTer H264 core — gather notes 
 # Cutting a release
 
 One artefact ships: the compressed `.rbf` (plus its `.rbf.json` manifest and the install
-zip from `tools/package_release.sh`, which also carries the Moonlight client: build it first
-from the release commit, `USE_DOCKER=1 clients/moonlight/build.sh`, and run its host test,
-`clients/moonlight/tests/run_test.sh --red`). The HPS client library (`hps/`, once it exists) is
+zip from `tools/package_release.sh`, which also carries the HPS clients -- Moonlight, Jellyfin,
+the video player, the camera viewer -- built by `package.yml` through `clients.yml` from the
+release commit). Run the clients' host tests from the release commit first
+(`clients/*/tests/run_test.sh --red`, `hps`'s `make test`). The HPS client library (`hps/`) is
 versioned by the interface version it speaks, and the release notes state which interface
 version this core implements.
 
@@ -63,10 +64,9 @@ An interface change that breaks existing HPS programs is at least a minor bump b
    `gh release edit v<semver> --draft=false`. Publishing deploys the manual (`docs.yml`;
    Pages needs the repository public). A later doc fix deploys from a `docs-v<semver>` branch
    cut off the tag, never from `main`.
-   ⚠ **Not yet working end to end:** `package.yml` runs `tools/package_release.sh`, which
-   packages the HPS clients and refuses without them, and the clients build only in a local
-   Docker image (`mister-h264-clients:deps2`). Settle that before the first release (roadmap
-   Phase 7) -- do not publish a zip without the clients.
+   `package.yml` builds the HPS clients itself (`clients.yml`, from the manifest's commit, in
+   images built from the repository) and packages them: the clients in the zip are the release
+   commit's. Build them locally too, for the hardware smoke test (step 5).
 
 ⛔ No version-reset step after publishing. The next feature branch sets its own
 `dev-<slug>` in its first commit.

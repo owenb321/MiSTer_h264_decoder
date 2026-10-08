@@ -2,10 +2,8 @@ name: package release
 
 # Inherited from MiSTer_DVD minus its custom-Main build.
 #
-# ⚠ NOT YET COMPLETE: tools/package_release.sh packages the HPS clients (Moonlight,
-# Jellyfin, the player, the camera viewer) and refuses without them, and they build in a
-# local Docker image this runner does not have. Settled before the first release
-# (docs/roadmap.md Phase 7).
+# The HPS clients (Moonlight, Jellyfin, the player, the camera viewer) the zip carries are
+# built here, by clients.yml, from the manifest's commit -- the tree the .rbf came from.
 
 # Assembles the distributable artifacts around an .rbf the maintainer has ALREADY
 # built and uploaded to a release DRAFT: validates the core, packages the install
@@ -180,29 +178,47 @@ jobs:
             + "| toolchain | \(.toolchain.quartus) |\n"
             + "| image | `\(.toolchain.image)` |"' incoming/*.rbf.json >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: incoming
           path: incoming/
           retention-days: 7
 
   # ------------------------------------------------------------------ assemble
+  # ------------------------------------------------------------------- clients
+  # The release commit's own clients, in their pinned images (every image builds from
+  # this repository). tools/package_release.sh refuses to package without them.
+  clients:
+    name: Build the clients
+    needs: validate
+    uses: ./.github/workflows/clients.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
   assemble:
     name: Package
-    needs: validate
+    needs: [validate, clients]
     runs-on: ubuntu-latest
     steps:
       # The MANIFEST's SHA, not refs/tags/$TAG: a draft has no tag, and this
       # guarantees the zip comes from the exact
       # tree the .rbf was synthesised from.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.sha }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: incoming
           path: incoming
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: clients-dist
+          path: .
+
+      - name: Unpack the clients (built from this commit by clients.yml)
+        run: tar -xf clients-dist.tar && rm clients-dist.tar
 
       - name: The source at this commit agrees with the manifest
         run: |
@@ -219,7 +235,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
