@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the manual first
+    url: https://owenb321.github.io/MiSTer_h264_decoder/reference/troubleshooting/
+    about: Troubleshooting covers most problems, including several that look like bugs.
+  - name: Is this stream supported?
+    url: https://owenb321.github.io/MiSTer_h264_decoder/reference/compatibility/
+    about: What the decoder plays, what it refuses, and what is known-incomplete.
