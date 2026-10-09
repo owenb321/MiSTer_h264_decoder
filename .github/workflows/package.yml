@@ -217,8 +217,13 @@ jobs:
           name: clients-dist
           path: .
 
+      # -m (--touch): the binaries take the time of unpacking, not their build time.
+      # package_release.sh refuses a binary older than its sources (a local rebuild check),
+      # and this checkout gave every source the time of the checkout, so the build times
+      # the tar keeps fail it always (the first release's run, 2026-10-09). Provenance is
+      # clients.yml's: it built them from the manifest's SHA, the tree checked out above.
       - name: Unpack the clients (built from this commit by clients.yml)
-        run: tar -xf clients-dist.tar && rm clients-dist.tar
+        run: tar -xmf clients-dist.tar && rm clients-dist.tar
 
       - name: The source at this commit agrees with the manifest
         run: |
