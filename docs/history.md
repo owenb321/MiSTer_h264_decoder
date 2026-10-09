@@ -1417,3 +1417,34 @@ both "Protocol not supported" (`-EPROTONOSUPPORT`), as designed -- the one break
 is built (`clients/*/build/dist`) and, after the merge (PR fj#43), installed on .201 at the maintainer's word: `_Other/H264_20261008.rbf`
 and the moonlight / jellyfin / h264player / h264stat / h264cam binaries, checksums equal to the builds; the installed core
 loaded from `_Other` reads version 256 through the installed `h264stat`. The 0.17 set kept as `*.iface0_17`.
+
+## 42. Release 1.0.0 (2026-10-08 / 09)
+
+The release commit `fdecab5` (the only one carrying `v1.0.0`): `CORE_VERSION`, `mkdocs.yml`'s `released_version`,
+compatibility's "Current as of", the install page's "Not yet released" gone, SEED 12. The manual audited first (PR #5:
+the four programs, Native as Auto's default, the ARM codecs; the pre-1.0 `(0.x)` marks and history stripped -- the
+maintainer's decision). Host tests from the release commit: `make -C hps test` and the four clients'
+`run_test.sh --red` ALL GREEN (and RED).
+
+**The fit.** The version string re-rolled the netlist: SEED 2 98.73 / 98.76, refused by `--release`. A sweep of fifteen
+seeds found two at the gate -- **SEED 12 103.15 / 102.38** and SEED 15 101.74 / 102.69 -- the rest 96.3-102.5 at one
+corner or the other (the ledger has every one). `--release --compile` with SEED 12 pinned reproduced 103.15 / 102.38,
+clk_vid 93.62 / 94.43, lint and canary PASS, 37,932 ALM (91 %), RAM 413, DSP 103: `H264_20261009.rbf` (sha256
+`d07607d3...`). Ungated: two crossings into clk_vid at 100 C, `analog_want_l` -> `ary[7]` -0.206 ns and `status[6]` ->
+`ary[7]` -0.086 ns (clk_sys settings flags into the aspect register, quasi-static) -- seed placement, like the clk_mem
+paths of §38 / §41.
+
+**The sweep's own defect.** The background task that ran `seed_sweep.sh` hit its time limit at seed 7; killing the
+attached `docker run` signalled the sweep, whose EXIT trap ran (deleting its `H264.qsf` snapshot) and left bash
+running the loop with `continue` / `break` dead: every later seed printed FAIL and then "PASS", the qsf restore
+failed (Quartus' 172-line rewrite left in place: restored from git), and the closing pack failed on the dirty tree.
+The measurements stand; the release was built by a fresh compile, not from the sweep's files. Fix wanted in
+`tools/seed_sweep.sh` (run it detached, or make the trap not fire mid-loop); until then run a sweep with
+`docker run -d` / `docker logs -f`, never under a killable foreground task.
+
+**On .201** (rebooted first, at the maintainer's word: a leftover DVD HIL Main from an earlier DVD session): stock
+Main, the release `.rbf` deployed (manifest `v1.0.0`, `fdecab5`, SEED 12), `h264play` and the clips rebuilt from the
+release commit. `p60.264` (720x480p59.94) 600 / 600 and `film.264` (23.976) 240 / 240 decoded, emitted and shown, ENDED,
+errors 0, `disp_skip` / `disp_late` / `disp_starve` 0, version 256; 480i (the box's analog ini), the picture letterboxed
+720 x 427 at line 26, the scaled output exactly 4:3. Restored. The About line itself is not visible to the harness;
+its version is the manifest's.
