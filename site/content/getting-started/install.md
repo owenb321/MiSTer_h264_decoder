@@ -1,10 +1,5 @@
 # Install the core
 
-!!! info "Not yet released"
-    There is no release yet. These steps describe how installation will work; until a
-    release exists, build the core from source (see
-    [Building from source](../about/building.md)).
-
 1. Download `MiSTer_h264_decoder_<version>.zip` from the latest release and extract it to
    the root of your SD card (`/media/fat`). It places `_Other/H264_YYYYMMDD.rbf` on the
    card, and the programs that come with it, each a script and a folder:

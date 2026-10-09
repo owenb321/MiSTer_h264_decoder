@@ -1,6 +1,6 @@
 # Compatibility
 
-Current as of: development build (no release yet).
+Current as of: release 1.0.0.
 
 | | Status |
 |---|---|

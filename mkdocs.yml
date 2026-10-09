@@ -105,7 +105,7 @@ extra:
   # The newest PUBLISHED release, shown in the announcement bar. "0.0.0" means no
   # release exists yet; the release process bumps it (and the package workflow
   # refuses a tag that disagrees with it).
-  released_version: "0.0.0"
+  released_version: "1.0.0"
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/owenb321/MiSTer_h264_decoder

@@ -349,6 +349,13 @@
 #     CORE_VERSION dev-iface1): SEED 2 first roll, **clk_dec 104.68/104.28 PASS**, clk_vid 92.17/90.51 PASS, clk_mem
 #     -0.093 at -40 C (ungated: disp_reader pm_r[13..14] -> row_base[23 / 25], the path fix/dither-latin's fit carried
 #     at -0.099 -- seed placement); ALM 38,043 (91 %), RAM 413, DSP 103, H264_iface1_20261008_0042.rbf.
+#   2026-10-09 (release 1.0.0 4abe1d3: CORE_VERSION v1.0.0, BUILD_DATE 261009 -- nothing else in the RTL): SEED 2 first
+#     roll 98.73/98.76 MARGINAL (--release refused); sweep (SEEDS 13 5 6 3 7 1 9 4 8 10 11 12 14 15 16): 13 99.37/100.39,
+#     5 101.25/100.58, 6 99.0/100.81, 3 98.3/99.48, 7 102.29/101.36, 1 100.99/102.5, 9 102.33/100.39, 4 100.75/99.29,
+#     8 99.1/100.46, 10 100.42/101.36, 11 100.1/101.29, **SEED 12 103.15/102.38 PASS**, 14 99.48/99.63, 15 101.74/102.69
+#     PASS, 16 100.06/96.31; ALM 37,932 (91 %), RAM 413, DSP 103. SEED 12 pinned; the release built by --release --compile.
+#     (The sweep's monitor was killed at seed 7: its EXIT trap deleted the qsf snapshot and continue / break stopped
+#     working -- the "PASS" lines after a FAIL are that, not passes; H264.qsf restored from git.)
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -451,4 +458,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 2
+set_global_assignment -name SEED 12
