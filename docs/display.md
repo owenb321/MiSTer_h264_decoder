@@ -69,12 +69,67 @@ line buffers, and the clk_sys side converts BT.601 limited range to RGB, LAT 4.
 design; `h264/disp_fit.sv` the per-picture parameters): it reads DECIMATED rows (boxes of
 `dh x dv` samples) into four TAGGED line slots, commands the rows the next raster line
 needs (at most two) at each line's start, and resamples with the 2-tap blend both ways
-(chroma nearest), black outside the picture's rectangle -- LAT 5 (the horizontal blend's
+(chroma nearest -- interpolated at the identity since 2026-10-09, "Chroma at the identity" below),
+black outside the picture's rectangle -- LAT 5 (the horizontal blend's
 stage). At the identity fit (720x480 in Progressive) the rows fetched are exactly the old
 rule's (row v + 2 during line v, the window v - 1 .. v + 1 held) and the output is the old
 golden bit for bit; the kernels below apply there only. `fetch_late` counts a line whose
 rows were not in when it began. The paragraphs below describe the P5 reader; the fetch
 rule and LAT are superseded as stated here.
+
+**Chroma at the identity (feature/chroma-interp, 2026-10-09) -- SUPERSEDED the next day by `docs/chroma.md`**
+(siting-aware bilinear on every output; this step's integers are its special case, kept below as the
+record of the measurement and the first decisions). The maintainer, testing 1.0.0 in
+Native (HDMI): "details around red colors show noticeable vertical bands around them" (the Netflix
+logo, a red suit's webbing). Measured on .201 with a synthetic 1280x720 pattern (red, blue and green
+details, 1- and 2-pixel lines, edges at every column offset) at Native: the core's raster matched a
+**nearest-chroma** model of ffmpeg's decode on 99.99 % of pixels (max 2 codes), an interpolating
+player's on 77 % (up to 108 codes apart). Nearest repeats each 4:2:0 chroma sample over its 2 x 2
+luma block, so a colour edge or a thin line inside saturated colour lands its whole chroma error in
+one hard one-pixel stripe on one side; MiSTer's HDMI scaler (1.5x to 1080p, a sharp filter's
+ringing) widens it into the bands. Red shows it most (the largest chroma excursion at a low luma, so
+luma cannot mask it). Nearest came with the display from UMD / DVD; no note weighed it as a quality
+choice.
+
+- **What changed: at the identity fit chroma is interpolated** at H.264's default siting
+  (`chroma_sample_loc_type` 0): horizontally co-sited with even luma columns -- an odd column x is
+  `(c[x >> 1] + c[(x + 1) >> 1] + 1) >> 1` -- then, on a frame store, vertically between luma rows
+  2m and 2m + 1: row 2m `(3 h[m] + h[m - 1] + 2) >> 2`, row 2m + 1 `(3 h[m] + h[m + 1] + 2) >> 2`
+  (two roundings; ffmpeg's single-rounding upsample within one code). The identity is `ident` (the
+  progressive raster, steps 1.0, no decimation): **Native (HDMI)** -- every picture -- and a 1:1
+  picture on Progressive (720x480, the 704x480 snap).
+- **The cost: shifts and adds, no DSP, no latency, no RAM.** At 1:1 the column steps by one a dot,
+  so stage 1 reads the sample AHEAD (`(x + 1) >> 1`, clamped to the crop's last) and the previous
+  dot's read is the left neighbour, still in stage 4's register (`r4_*`). That index is the second
+  tap's own, `x_k1 >> 1` (`x_k1 = min(x + 1, kmax)`, the crop's first column even), so the identity
+  only adds a term to the chroma tap's choice. (The first form computed `(x_k0 + 1) >> 1` against
+  `kmax >> 1` in front of the RAM's address: clk_vid's worst path, 81.6 MHz against its 86 gate.) The rows above and below
+  are already held at the identity (the kernel's `a` / `d`: k - 1 / k + 1, the window v - 1 .. v + 1),
+  their chroma rows (k +- 1) >> 1. Stage 4 blends horizontally (all three rows), stage 5 vertically.
+  LAT stays 9.
+- **Invariant relied on:** a line's first shown column at the identity is even (the crop's `lx` is
+  even: H.264's CropUnitX = 2 at 4:2:0, the PICTURE record's crop in pairs), so the first shown dot
+  never needs a left neighbour from before the line. The picture's edges replicate (the right edge by
+  the clamp; the first / last row by the reader's mirror, a = k + 1 / d = k - 1 -- chroma row m itself).
+- **Decided: the siting is type 0, fixed.** The VUI's `chroma_sample_loc_type` is not read. Type 0
+  is H.264's default and what encoders write (x264, NVENC, the servers' transcodes); a type-1 or
+  type-2 stream keeps a half-sample colour offset -- as every stream had under nearest. Reading it is
+  a later refinement (the SPS parser would carry two more fields to the display).
+- **Decided: the identity only.** The scaled outputs (Interlaced, Progressive at another size) keep
+  chroma nearest at the tap: their positions are fractional per dot, so interpolation there needs
+  variable weights -- multipliers (9 DSP blocks left) or a second chroma read per tap -- and the
+  analog screens they mostly feed soften the 2-pixel step themselves (a CRT's chroma bandwidth). 480i
+  is never the identity (`ident` requires the progressive raster).
+- **Decided: a store of fields interpolates horizontally only.** Its rows `a` / `d` are the OTHER
+  field's lines (the Weave / Bob / Blend kernel consumes them); weighting them as progressive chroma
+  would mix the fields. Vertically each field's chroma stays nearest, as before.
+- **Verified:** `tools/disp_golden.py` (`hup`, `vrow`, `up_ident`, `up_field`; `render` at the
+  identity) is the bit-exact golden; its independent check is ffmpeg's own upsampling
+  (`scale=in_chroma_loc=left:flags=bilinear+full_chroma_int+accurate_rnd`, validated first on an
+  impulse: the even column full, odd neighbours one half; rows 2m / 2m + 1 three quarters, the rows
+  beyond one quarter -- without `in_chroma_loc` ffmpeg assumes centre siting). The 480i arms keep
+  nearest (`disp_want_frame_il` / `field_il`); every fitted case is unchanged. `--red`: Z1-Z7
+  (`bench/h264/run_disp_reader.sh`).
 
 **Field-aware chroma (P5a).** A store of fields holds them line-interleaved in every
 plane (`h264_recon.md` §2.2): luma line y is field (y & 1)'s line y >> 1, chroma row c

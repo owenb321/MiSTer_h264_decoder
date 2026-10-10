@@ -64,6 +64,9 @@ module recon_hdr
     // transfer_characteristics, matrix_coefficients} -- held with sps. Kept in its own table, not in
     // sps_t: sps_t is also the front end's sps_mem, which never reads them.
     output logic [25:0] sps_colour,
+    // (docs/chroma.md §4) the slice's SPS's chroma siting: {chroma_sample_loc_type_bottom_field,
+    // _top_field}, each 0..5 (E.2.1: absent 0; a value past 5, a malformed VUI, taken as 0) -- held with sps
+    output logic [5:0]  sps_siting,
     output logic [PPS_W-1:0] pps,
     output logic [13:0] sh_first_mb,
     output logic [1:0]  sh_slice_type,     // 0 P, 1 B, 2 I
@@ -137,10 +140,10 @@ module recon_hdr
 
     // ---- the parameter stores ----------------------------------------------------------
     logic [SPS_W-1:0] sps_ram [0:31];
-    logic [25:0] col_ram [0:31];             // (0.16) beside it, by the same id
-    logic [25:0] col_q;
-    logic [25:0] c_stage;                    // the SPS being received: its colour description
-    localparam logic [25:0] C_DEFAULT = {1'b0, 1'b0, 8'd2, 8'd2, 8'd2};   // E.2.1: absent -> 2 (unspecified), limited
+    logic [31:0] col_ram [0:31];             // (0.16) beside it, by the same id; (chroma.md §4) [31:26] the siting
+    logic [31:0] col_q;
+    logic [31:0] c_stage;                    // the SPS being received: its colour description and chroma siting
+    localparam logic [31:0] C_DEFAULT = {3'd0, 3'd0, 1'b0, 1'b0, 8'd2, 8'd2, 8'd2};   // E.2.1: absent -> 2 (unspecified), limited; siting 0
     logic [PPS_W-1:0] pps_ram [0:255];
     logic [31:0] sps_valid;
     logic [255:0] pps_valid;
@@ -246,9 +249,10 @@ module recon_hdr
     logic        cn_q, cn_sps_q, ch_q;
     logic [4:0]  cs_id_q;
     logic [7:0]  ca_q, cv_q;
+    logic        cbig_q;                     // (chroma.md §4) the value past 5 (the whole word: cv_q is its low byte)
     always_ff @(posedge clk) begin
         cn_q <= is_nal; cn_sps_q <= is_nal && in_sps; cs_id_q <= s_id;
-        ch_q <= is_hdr && in_sps; ca_q <= se_aux; cv_q <= se_val[7:0];
+        ch_q <= is_hdr && in_sps; ca_q <= se_aux; cv_q <= se_val[7:0]; cbig_q <= (se_val > 32'd5);
     end
     wire signed [31:0] sval = se_val;
 
@@ -296,7 +300,7 @@ module recon_hdr
             w_crw <= '0; w_cro <= '0; w_pending <= 1'b0; wt_we <= 1'b0; wt_waddr <= '0; wt_wdata <= '0;
             mod_we <= 1'b0; mod_waddr <= '0; mod_wdata <= '0; m_list <= 1'b0; m_idc <= '0; m_pending <= 1'b0;
             mmco_we <= 1'b0; mmco_waddr <= '0; mmco_wdata <= '0; mm_op <= '0; mm_a <= '0; mm_b <= '0; mm_pending <= 1'b0;
-            act <= '0; slice_ready <= 1'b0; sps <= '0; pps <= '0; sps_colour <= C_DEFAULT;
+            act <= '0; slice_ready <= 1'b0; sps <= '0; pps <= '0; sps_colour <= C_DEFAULT[25:0]; sps_siting <= 6'd0;
             sh_first_mb <= '0; sh_slice_type <= '0; sh_nal_ref_idc <= '0; sh_idr <= 1'b0; sh_frame_num <= '0;
             sh_field_pic <= 1'b0; sh_bottom_field <= 1'b0; sh_poc_lsb <= '0; sh_delta_poc_bottom <= '0;
             sh_delta_poc0 <= '0; sh_delta_poc1 <= '0; sh_direct_spatial <= 1'b0; sh_num_ref_l0 <= '0;
@@ -359,6 +363,8 @@ module recon_hdr
                 F_colour_primaries:                c_stage[23:16] <= cv_q;
                 F_transfer_characteristics:        c_stage[15:8] <= cv_q;
                 F_matrix_coefficients:             c_stage[7:0] <= cv_q;
+                F_chroma_sample_loc_type_top_field:    c_stage[28:26] <= cbig_q ? 3'd0 : cv_q[2:0];
+                F_chroma_sample_loc_type_bottom_field: c_stage[31:29] <= cbig_q ? 3'd0 : cv_q[2:0];
                 default: ;
             endcase
             if (is_hdr && in_sps) begin
@@ -546,7 +552,8 @@ module recon_hdr
                 if (!sps_valid[pps_qt.sps_id]) err_no_sps <= 1'b1;
                 pps <= pps_q;
                 sps <= sps_q;
-                sps_colour <= col_q;
+                sps_colour <= col_q[25:0];
+                sps_siting <= col_q[31:26];
                 sh_first_mb <= h_first_mb;
                 sh_slice_type <= h_slice_type;
                 sh_nal_ref_idc <= h_nal_ref_idc;

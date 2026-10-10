@@ -318,7 +318,15 @@ fields and word 80's place 0 while no picture is shown; fit SEED 2 102.18 / 102.
 word or field moves or changes meaning, 0 keeps 1.0's behaviour; anything else is 2.0); the library attaches to a core
 of the same major and a minor >= its own (`h264ring_version_ok()` in `h264ring.h`; exact below 1.0); the integrator
 pages normative. Fit SEED 2 104.68 / 104.28 PASS (`H264_iface1_20261008_0042.rbf`); on .201 word 1 `0x0100`, a capture
-plays as on main's build (control arm equal), 0.17 <-> 1.0 refused both ways (`docs/history.md` §41). Next: the release (1.0) and the move to GitHub (roadmap Phase 7). 90 % ALM, 10 DSP left (after PR fj#32).
+plays as on main's build (control arm equal), 0.17 <-> 1.0 refused both ways (`docs/history.md` §41). **Release 1.0.0 drafted
+2026-10-09** (GitHub draft `v1.0.0`, release commit `fdecab5`, SEED 12; the zip packaged by CI, PR #6; tested on .201,
+`docs/history.md` §42) -- published with the move to public (Pages needs it). **Chroma reconstruction (roadmap Phase 6e) ✅ MERGED
+(PR #8)**: the maintainer's bands beside red in Native (HDMI) were the reader's NEAREST chroma. First an
+identity-only fix (fit SEED 5, verified on .201: `docs/history.md` §43), then **the full version** (decided 2026-10-10,
+`docs/chroma.md`): the SPS's `chroma_sample_loc_type` carried to the display, chroma rows in their own 8 slots, bilinear
+chroma at the siting on every output (fields within their field); benches GREEN / `--red`; fit SEED 2 102.15 / 102.45 PASS
+(`H264_chromafull_20261010_1752.rbf`, 93 % ALM, 3 DSP left); on .201 every output matches the golden 99.99-100 %
+(`docs/history.md` §44); ✅ HW-CONFIRMED 2026-10-10 (the maintainer on .201: "this looks better"). Parked (the session memory, not yet in docs/): the Jellyfin freeze and no-audio fixes. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

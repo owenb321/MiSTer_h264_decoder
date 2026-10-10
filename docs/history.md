@@ -1448,3 +1448,44 @@ release commit. `p60.264` (720x480p59.94) 600 / 600 and `film.264` (23.976) 240 
 errors 0, `disp_skip` / `disp_late` / `disp_starve` 0, version 256; 480i (the box's analog ini), the picture letterboxed
 720 x 427 at line 26, the scaled output exactly 4:3. Restored. The About line itself is not visible to the harness;
 its version is the manifest's.
+
+## 43. Chroma at the identity (feature/chroma-interp, 2026-10-09 / 10)
+
+The maintainer, testing 1.0.0 in Native (HDMI) on .201: vertical bands beside red detail. A synthetic
+1280x720 pattern (`redpat.264`: red / blue / green details on white and black, 1- and 2-pixel lines,
+edges at every column offset; H.264 High QP 2, BT.709 limited) played through `h264play --osd
+video_output=3`, the raw raster screenshotted, compared with models built on ffmpeg's decode:
+
+| build | nearest model | the RTL's interpolation | ffmpeg's upsampling (in_chroma_loc=left) |
+|---|---|---|---|
+| 1.0.0 (`H264_20261009.rbf`) | **99.99 %** exact, max 2 | -- | 77 %, max 108 |
+| `H264_chromasweep_20261010_0632.rbf` (SEED 5) | 76 %, max 107 | **99.99 %** exact, max 2 | 98.5 %, max 3 |
+
+90 / 90 pictures, `disp_fetch_late` 0, the raster 1280x720 native, colour code 3. The design and its
+decisions: `display.md` §3 "Chroma at the identity"; the fits: the SEED LEDGER (SEED 12 marginal --
+clk_vid 81.6 from the first ahead index, fixed by using the second tap -- then SEED 5 PASS). The sweep
+ran detached (`setsid`): §42's trap avoided.
+
+## 44. Chroma reconstruction, the full version (feature/chroma-interp, 2026-10-10)
+
+`docs/chroma.md`: the SPS's `chroma_sample_loc_type` to the display, chroma rows in their own slots,
+siting-aware bilinear chroma on every output. Fits (the SEED LEDGER): the first missed clk_vid (62.5 MHz:
+the chroma slot allocation's running minimum over eight slots -- made parallel) and clk_mem (-7.2 ns: the
+chroma command's crossing unbounded in `h264.sdc` -- bounded, as m_hpf / m_vpf had been in 6d); then SEED 2
+102.15 / 102.45, clk_vid 96.94 / 91.46 PASS (`H264_chromafull_20261010_1752.rbf`, 39,040 ALM 93 %, DSP 109).
+
+**On .201** (rebooted first at the maintainer's word: a DVD harness Main left resident by a session no live
+one claimed), `redpat.264` (1280x720, BT.709) at three outputs, the raw raster against
+`tools/disp_golden.py`'s `render` with the core's reported fit, bilinear (the design) and the old reader's
+nearest rule:
+
+| output | the fit | bilinear | nearest |
+|---|---|---|---|
+| Native (HDMI) | 1280x720, 1:1 | 99.99 % exact, max 2 | 75.9 %, max 107 |
+| Progressive (480p) | 720x480, Area | 99.99 % exact, max 2 | 72.2 %, max 144 |
+| Interlaced (480i) | 720x360 letterboxed, Area | 100.00 % exact, max 2 | 65.9 %, max 146 |
+
+90 / 90 pictures each, errors 0, `disp_fetch_late` 0. Restored. Then installed on .201 as
+`_Other/H264_20261010.rbf` (beside 1.0.0's `H264_20261009.rbf`; the programs load the newest) for the
+maintainer's own round on real content: **"this looks better"** (2026-10-10).
+

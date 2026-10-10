@@ -77,7 +77,7 @@ wire [32:0] rec_pts, rec_pts_b;
 recon_out #(.NST(20)) u_out (
     .clk(clk), .rst_n(rst_n),
     .pinfo_we(pinfo_we), .pinfo_store(pinfo_store), .pinfo_second(pinfo_second), .pinfo_w_mbs(pinfo_w),
-    .pinfo_hf_mbs(pinfo_hf), .pinfo_crop(41'd0), .pinfo_aspect(40'd0), .pinfo_colour(3'd1), .pinfo_col_unsup(1'b0), .pinfo_col_tags(26'd0), .pinfo_timing_v(pinfo_timing_v),
+    .pinfo_hf_mbs(pinfo_hf), .pinfo_crop(41'd0), .pinfo_aspect(40'd0), .pinfo_colour(3'd1), .pinfo_col_unsup(1'b0), .pinfo_col_tags(26'd0), .pinfo_siting(6'd0), .pinfo_timing_v(pinfo_timing_v),
     .pinfo_nuit(pinfo_nuit), .pinfo_ts(pinfo_ts), .pinfo_ps(pinfo_ps), .pinfo_ps_v(pinfo_ps_v), .pinfo_pts(pinfo_pts),
     .pinfo_pts_v(pinfo_pts_v), .pinfo_idr(1'b0),
     .emit_valid(emit_valid), .emit_store(emit_store), .emit_unpaired(emit_unpaired), .emit_first_bot(emit_first_bot),
@@ -108,7 +108,7 @@ disp_ctl u_ctl (
     .clk(sclk), .rst_n(srst_n), .frame0(h_pos == 12'd0 && v_pos == 12'd0), .il(il), .std(std),
     .rec_valid(rec_valid), .rec_more(rec_more), .low_lat(ll), .pause(1'b0), .aanc(1'b0), .aanc_pts(33'd0), .rec_take(rec_take), .rec_end(rec_end), .rec_store(rec_store), .rec_frame(rec_frame),
     .rec_unpaired(rec_unpaired), .rec_first_bot(rec_first_bot), .rec_dec_t(rec_dec_t), .rec_dec_b(rec_dec_b),
-    .rec_w_mbs(rec_w), .rec_hf_mbs(rec_hf), .rec_crop(rec_crop), .rec_aspect(rec_aspect), .rec_colour(3'd1), .rec_col_unsup(1'b0), .rec_col_tags(26'd0), .rec_timing_v(rec_timing_v), .rec_nuit(rec_nuit),
+    .rec_w_mbs(rec_w), .rec_hf_mbs(rec_hf), .rec_crop(rec_crop), .rec_aspect(rec_aspect), .rec_colour(3'd1), .rec_col_unsup(1'b0), .rec_col_tags(26'd0), .rec_siting(6'd0), .rec_timing_v(rec_timing_v), .rec_nuit(rec_nuit),
     .rec_ts(rec_ts), .rec_ps_a(rec_ps_a), .rec_ps_a_v(rec_ps_a_v), .rec_ps_b(rec_ps_b), .rec_ps_b_v(rec_ps_b_v),
     .rec_pts(rec_pts), .rec_pts_v(rec_pts_v), .rec_pts_b(rec_pts_b), .rec_pts_b_v(rec_pts_b_v),
     .rel_valid(rel_valid), .rel_store(rel_store),
@@ -126,7 +126,7 @@ wire [31:0] fetch_changes;
 disp_reader #(.DPB_BASE(BASE)) u_rd ( .lines(sg_lines), .last_line(sg_last),
     .clk(sclk), .ce(1'b1), .rst_n(srst_n), .h_pos(h_pos), .v_pos(v_pos), .il(il), .pal(std == 2'd2), .de_in(1'b1),
     .pic_valid(sh_valid), .pic_store(sh_store), .pic_field(sh_field), .pic_w_mbs(sh_w), .pic_hf_mbs(sh_hf),
-    .pic_parity(sh_parity), .pic_single(sh_single), .deint_mode(2'd2), .pic_colour(3'd1),
+    .pic_parity(sh_parity), .pic_single(sh_single), .deint_mode(2'd2), .pic_colour(3'd1), .pic_siting(6'd0),
     // the identity fit (P6 step 3): 720x480 filled 1:1 -- the scheduler's scenarios are about
     // WHICH picture, not where (bench/h264/disp_reader_tb.sv scores the fit)
     .fit_ow(13'd720), .fit_oh(13'd480), .fit_ox0(14'd0), .fit_oy0(14'd0), .fit_sx(28'h001_0000), .fit_sy(28'h001_0000),

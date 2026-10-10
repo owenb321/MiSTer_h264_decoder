@@ -67,6 +67,7 @@ module pic_in #(
     input  wire  [2:0]   r_pinfo_colour,      // (0.16)
     input  wire          r_pinfo_col_unsup,
     input  wire  [25:0]  r_pinfo_col_tags,
+    input  wire  [5:0]   r_pinfo_siting,      // (docs/chroma.md §4) the decoder's picture's chroma siting
     input  wire          r_pinfo_timing_v,
     input  wire  [31:0]  r_pinfo_nuit,
     input  wire  [31:0]  r_pinfo_ts,
@@ -94,6 +95,7 @@ module pic_in #(
     output logic [2:0]   pinfo_colour,        // (0.16)
     output logic         pinfo_col_unsup,     // (0.16) a program's picture: 0
     output logic [25:0]  pinfo_col_tags,      // (0.16) a program's picture: no colour description (2, 2, 2, limited)
+    output logic [5:0]   pinfo_siting,        // (chroma.md §4) a program's picture: 0 (interface 1.0 carries none)
     output logic         pinfo_timing_v,
     output logic [31:0]  pinfo_nuit,
     output logic [31:0]  pinfo_ts,
@@ -190,6 +192,7 @@ module pic_in #(
             pinfo_colour   = d_colour;
             pinfo_col_unsup = 1'b0;
             pinfo_col_tags = {1'b0, 1'b0, 8'd2, 8'd2, 8'd2};
+            pinfo_siting   = 6'd0;
             pinfo_timing_v = d_timing_v;
             pinfo_nuit     = d_nuit;
             pinfo_ts       = d_ts;
@@ -217,6 +220,7 @@ module pic_in #(
             pinfo_colour   = r_pinfo_colour;
             pinfo_col_unsup = r_pinfo_col_unsup;
             pinfo_col_tags = r_pinfo_col_tags;
+            pinfo_siting   = r_pinfo_siting;
             pinfo_timing_v = r_pinfo_timing_v;
             pinfo_nuit     = r_pinfo_nuit;
             pinfo_ts       = r_pinfo_ts;

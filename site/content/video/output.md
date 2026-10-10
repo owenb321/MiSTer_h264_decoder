@@ -32,7 +32,10 @@ are part of it and a player can show subtitles there.
 -- 852x480, 640x480 (shown 853x480 with its side bars), 720x576, **1280x720** ... -- at the same
 refresh rate, and the HDMI scaler makes the only resize to your display, the sharpest HDMI
 picture. Every picture the core plays is shown this way, 720p included (any size up to 2,048
-pixels on a side). Each new picture size is a brief blip on HDMI (and MiSTer's resolution box, if
+pixels on a side). Video stores its colour at half the resolution of its brightness; on every output -- Native, Progressive
+and Interlaced, scaled or not -- the core rebuilds it by blending smoothly between the colour samples, at
+the position the video says they sit (its chroma siting), so fine detail in strong colours (red text, a
+logo's edge, a coloured subtitle outline) stays clean instead of turning into blocky steps. Each new picture size is a brief blip on HDMI (and MiSTer's resolution box, if
 `video_info` is set). Native is for HDMI only: the analog output carries the same unusual timing
 unless `vga_scaler=1`.
 

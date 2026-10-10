@@ -133,19 +133,20 @@ module ring_rd_tb;
     logic [31:0] po_nuit, po_ts, pic_emitted, n_emit, n_rel;
     logic [4:0]  po_store, po_estore;  logic [7:0] po_w, po_hf;  logic [40:0] po_crop;  logic [39:0] po_aspect;
     logic [2:0]  po_colour;  logic po_col_unsup;  logic [25:0] po_col_tags;   // (0.16)
+    logic [5:0]  po_siting;                                                   // (docs/chroma.md §4)
     logic [3:0]  po_ps;  logic [32:0] po_pts;  logic [19:0] oq_hold;  logic rec_ovf, rel_bad;
     pic_in #(.NST(20)) u_pic (
         .clk(dclk), .rst_n(fe_rst_dec_n), .cnt_rst_n(lock_dec_n),
         .pd_req, .pd_store, .pd_w, .pd_hf, .pd_struct, .pd_ps, .pd_ps_v, .pd_aspect, .pd_colour, .pd_timing_v, .pd_nuit, .pd_ts,
         .pd_crop, .pd_pts, .pd_pts_v, .pd_eos, .pd_ack, .pd_busy, .oq_hold, .pic_emitted, .sel(),
         .r_pinfo_we(1'b0), .r_pinfo_store(5'd0), .r_pinfo_second(1'b0), .r_pinfo_w_mbs(8'hA5), .r_pinfo_hf_mbs(8'h5A),
-        .r_pinfo_crop(41'd0), .r_pinfo_aspect(40'd0), .r_pinfo_colour(3'd0), .r_pinfo_col_unsup(1'b0), .r_pinfo_col_tags(26'd0), .r_pinfo_timing_v(1'b0), .r_pinfo_nuit(32'd0), .r_pinfo_ts(32'd0),
+        .r_pinfo_crop(41'd0), .r_pinfo_aspect(40'd0), .r_pinfo_colour(3'd0), .r_pinfo_col_unsup(1'b0), .r_pinfo_col_tags(26'd0), .r_pinfo_siting(6'd0), .r_pinfo_timing_v(1'b0), .r_pinfo_nuit(32'd0), .r_pinfo_ts(32'd0),
         .r_pinfo_ps(4'd0), .r_pinfo_ps_v(1'b0), .r_pinfo_pts(33'd0), .r_pinfo_pts_v(1'b0), .r_pinfo_idr(1'b0),
         .r_emit_valid(1'b0), .r_emit_store(5'd0), .r_emit_unpaired(1'b0), .r_emit_first_bot(1'b0), .r_emit_frame(1'b0),
         .r_emit_dec_t(1'b0), .r_emit_dec_b(1'b0), .r_eos_done(1'b0),
         .pinfo_we(po_we), .pinfo_store(po_store), .pinfo_second(po_second), .pinfo_w_mbs(po_w), .pinfo_hf_mbs(po_hf),
         .pinfo_crop(po_crop), .pinfo_aspect(po_aspect), .pinfo_colour(po_colour), .pinfo_col_unsup(po_col_unsup),
-        .pinfo_col_tags(po_col_tags), .pinfo_timing_v(po_timing_v), .pinfo_nuit(po_nuit),
+        .pinfo_col_tags(po_col_tags), .pinfo_siting(po_siting), .pinfo_timing_v(po_timing_v), .pinfo_nuit(po_nuit),
         .pinfo_ts(po_ts), .pinfo_ps(po_ps), .pinfo_ps_v(po_ps_v), .pinfo_pts(po_pts), .pinfo_pts_v(po_pts_v),
         .pinfo_idr(po_idr), .emit_valid(po_valid), .emit_store(po_estore), .emit_unpaired(po_unpaired),
         .emit_first_bot(po_first_bot), .emit_frame(po_frame), .emit_dec_t(po_dec_t), .emit_dec_b(po_dec_b),
@@ -159,7 +160,7 @@ module ring_rd_tb;
         .clk(dclk), .rst_n(fe_rst_dec_n),
         .pinfo_we(po_we), .pinfo_store(po_store), .pinfo_second(po_second), .pinfo_w_mbs(po_w), .pinfo_hf_mbs(po_hf),
         .pinfo_crop(po_crop), .pinfo_aspect(po_aspect), .pinfo_colour(po_colour), .pinfo_col_unsup(po_col_unsup),
-        .pinfo_col_tags(po_col_tags), .pinfo_timing_v(po_timing_v), .pinfo_nuit(po_nuit),
+        .pinfo_col_tags(po_col_tags), .pinfo_siting(po_siting), .pinfo_timing_v(po_timing_v), .pinfo_nuit(po_nuit),
         .pinfo_ts(po_ts), .pinfo_ps(po_ps), .pinfo_ps_v(po_ps_v), .pinfo_pts(po_pts), .pinfo_pts_v(po_pts_v),
         .pinfo_idr(po_idr), .emit_valid(po_valid), .emit_store(po_estore), .emit_unpaired(po_unpaired),
         .emit_first_bot(po_first_bot), .emit_frame(po_frame), .emit_dec_t(po_dec_t), .emit_dec_b(po_dec_b),

@@ -934,6 +934,34 @@ great in Native, much worse in Progressive (`analog.md` §11). Found: the host's
 - [x] ✅ MERGED (PR fj#32, 2026-10-05).
 - Not changed (the maintainer, 2026-10-04): ascal's own filter when Main loads none (nearest).
 
+## Phase 6e — Chroma reconstruction: siting-aware bilinear on every output (asked 2026-10-09, the maintainer) -- ✅ MERGED (PR #8), ✅ HW-CONFIRMED 2026-10-10 (the maintainer on .201)
+
+The report, testing 1.0.0 in Native (HDMI): vertical bands beside red detail (the Netflix logo, a red
+suit's webbing). Measured on .201: the reader showed chroma NEAREST (99.99 % of a test pattern), each
+4:2:0 sample's error in one hard one-pixel stripe, widened by HDMI's scaler (`display.md` §3 "Chroma at
+the identity").
+- [x] At the identity fit (Native, a 1:1 Progressive picture) chroma interpolated at H.264's default
+      siting: horizontally (the sample read one ahead = the second tap; the left neighbour the previous
+      dot's), vertically on a frame store (the kernel's rows a / d). Shifts and adds: no DSP, no RAM,
+      LAT 9. Stores of fields horizontal only; the scaled outputs and 480i nearest; siting type 0 fixed.
+- [x] `run_disp_reader.sh` GREEN (57 arms) and `--red` (72 mutations, Z1-Z7 new); the golden checked
+      against ffmpeg's in_chroma_loc=left upsampling within a code; `run_vid_equiv.sh` ALL GREEN.
+- [x] Fit: SEED 12 MARGINAL (clk_vid 81.6: the first ahead index before the RAM address -- replaced by
+      the second tap), then SEED 5 103.33 / 104.01, clk_vid 96.31 / 95.39 PASS
+      (`H264_chromasweep_20261010_0632.rbf`); on .201 the pattern at Native matches the RTL's integers
+      on 99.99 % of pixels, ffmpeg's upsampling within 3 codes (was 76 % / 107: `history.md` §43).
+- [x] **The full version** (2026-10-10, "let's do the full version"; `docs/chroma.md`): the stream's
+      `chroma_sample_loc_type` (all six types) carried from the SPS to the display; chroma rows in their own
+      8 slots (each fetched once); bilinear chroma at the siting on EVERY output -- Interlaced, Progressive,
+      Native, scaled or not; a field store within its own field. The identity step is its special case.
+      Benches GREEN / `--red` (`chroma.md` §6).
+- [x] Fit SEED 2 102.15 / 102.45, clk_vid 96.94 / 91.46 PASS; on .201 at Native, Progressive (scaled, Area) and
+      480i the raster matches the golden 99.99-100 % (`history.md` §44).
+- [x] The maintainer's look on real content (.201, 2026-10-10): "this looks better".
+- [x] Merged (PR #8).
+- Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
+  chroma under the Area pre-filter.
+
 ## Phase 7 — For integrators
 
 - [x] ✅ **The interface frozen at 1.0 -- MERGED (PR fj#43)** (2026-10-07; `architecture.md` "Version 1.0",

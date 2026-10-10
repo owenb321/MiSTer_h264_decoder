@@ -12,12 +12,14 @@
 # busy, both aborts clean; disp_reader_tb (the reader fed by h264/disp_fit.sv) on every
 # deinterlace variant at the identity fit (P5f) and every fitted case (P6 step 3), each dot
 # {de, R, G, B} against tools/disp_golden.py, LAT 5: [rgb] a frame (the BT.601 conversion
-# of the store's samples: the identity fit is the old golden bit for bit); [field] the same
+# of the store's samples, chroma interpolated at the identity -- docs/display.md "Chroma at the
+# identity"); [field] the same
 # store as a field pair, woven (ffmpeg separatefields); [pass] the frame in Bob and in Blend
 # (untouched); [blend] the pair in Blend (ffmpeg's interlace lowpass; both edges' mirrors
 # are its first and last lines); [bob] the pair in Bob keeping either field; [single] one
 # field in Weave and in Blend (bobbed on its own field); [il] (P6) the 480i raster -- a
-# frame, and a field pair with the menu on Blend -- shown as woven fields, every pixel two
+# frame, and a field pair with the menu on Blend -- shown as woven fields, chroma nearest (not the
+# identity: disp_want_frame_il / field_il), every pixel two
 # dots; [fit] the nine fitted pictures of bench/h264/fixtures/gen/disp_fit_cases.txt
 # (480x272 up, 720x576 pillarboxed, 854x480 letterboxed and under Crop, 480x854 portrait,
 # the 704x480 10:11 snap, 192x2048 decimated 2 x 4, 2048x192 decimated 2, 640x480
@@ -64,12 +66,8 @@
 #   C6  disp: code 2's Kc 298, not 256 (the full range's luma)       -> [colour] c2
 #   C7  disp: the code ignored (always BT.601 limited)               -> [colour] c3
 #   C8  disp: the code not latched per refresh (read live)           -> [colour] colswap
-#   D2  disp: the frame chroma row = the luma row (not row / 2)      -> [rgb]
 #   D3  disp: dot 0 read with the previous line's slots              -> [rgb]
-#   D4  disp: a field store's chroma row = the frame's (y >> 1)      -> [field]
-#   D5  disp: a field store's chroma from the OTHER field (y & 1 inverted) -> [field]
 #   K1  disp: the blend's rounding +1 -> +2 (luma)                   -> [blend]
-#   K2  disp: the blend leaves Cb unfiltered                         -> [blend]
 #   K3  disp: bob keeps the other field                              -> [bob]
 #   K4  disp: the bob's rebuilt line rounds down                     -> [bob]
 #   K5  disp: no top mirror (row 0's a = row -1)                     -> [blend]
@@ -87,7 +85,6 @@
 #   R3  disp: the box's rounding dropped (s = 1)                     -> [fit] wide
 #   R4  disp: the accumulator ignored (the last row alone, dv 4)     -> [fit] tall
 #   R5  disp: the crop's left origin ignored                         -> [fit] w
-#   R6  disp: chroma always the first tap (not the nearer)           -> [fit] p640
 #   R7  disp: the rectangle's offset ignored in the position         -> [fit] v
 #   (R8, the current line's slots unprotected, is EQUIVALENT under today's eviction: rows
 #   only increase within a refresh and a victim is an invalid slot or the lowest row, so with
@@ -99,9 +96,6 @@
 #   (§11b: anti-twitter's sliding rows are now the vertical pre-filter's code 4 -- the same integers)
 #   T1  disp: the luma box dv rows, not 2 dv (no sliding)            -> [fit] at_id
 #   T2  disp: the half-row shift dropped (the pre-filter's S / 8)    -> [fit] at_w
-#   T3  disp: chroma at the nearer tap (not the second)              -> [fit] at_v
-#       (at_w cannot see it: its step is 4/3, so a line weighted below a half always lands on
-#       an even row, where the nearer and the second tap share a chroma row)
 #   T4  disp: the taps clamp to kmax (the box past the picture)      -> [fit] at_id
 #   T5  disp: the sliding box's rounding dropped (s = 0)             -> [fit] at_id
 #   T6  disp: the dv-4 shift of the sliding rows wrong               -> [fit] at_tall
@@ -114,7 +108,6 @@
 #   F1  disp: Area's horizontal A = 3 taken as 2                     -> [fit] hd_area
 #   F2  disp: a row's last word never flushed                        -> [fit] port_area (odd W)
 #   F3  disp: the first box's weight 8 (not 8 - A: the sum past 8)   -> [fit] hd_area
-#   F4  disp: chroma's column not at the unshifted position (+ 32 A) -> [fit] hd_area
 #   F5  disp: Area's rows one box (only anti-twitter's two)          -> [fit] port_area
 #   F6  disp: the columns' centre offset dropped                     -> [fit] hd_area
 #   F7  disp: the next word's lane not read (the word replicated)    -> [fit] hd_area
@@ -122,6 +115,20 @@
 #   the 2 MiB stores (interface 0.11, 1280x720: [fit] hd, a 3,600-macroblock store at store 17):
 #   H1  disp: the store shift 17 (1 MiB stores)                      -> [fit] hd / [ddr] (outside the window)
 #   H2  disp: Cr's plane offset in 17 bits (40 W HF = 144,000 wraps)  -> [fit] hd
+#   (docs/chroma.md) siting-aware bilinear chroma on every output (the golden's chroma_line, checked against
+#   ffmpeg's in_chroma_loc upsampling at all six sitings, a ramp at every fitted case, the worked positions):
+#   N1  disp: the horizontal weight ignored (row 0's Cb)             -> [rgb]
+#   N2  disp: the vertical blend's first weight 256 (not 256 - w)    -> [rgb]
+#   N3  disp: a field store's chroma rows frame-wise (not 2 k + p)   -> [field]
+#   N4  disp: Bob's rebuilt line from its own field (not the kept)   -> [bob]
+#   N5  disp: the bottom field's siting taken as the top's           -> [field] field_s16
+#   N6  disp: the bottom-sited types' vertical offset 0 (not 1)      -> [rgb] s5
+#   N7  disp: the centred types' horizontal offset dropped           -> [rgb] s1
+#   N8  disp: the chroma column's (dh - 1) dropped                   -> [fit] hd
+#   N9  disp: the second chroma tap not clamped (the right edge)     -> [rgb]
+#   N10 disp: a frame's chroma row position without (dv - 1)         -> [fit] tall
+#   N11 disp: a chroma row's source rows not x dv                    -> [fit] tall
+#   (the vertical weight zeroed below the crop is an EQUIVALENT mutant: there both taps are the first row)
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim
@@ -172,11 +179,15 @@ DISP_ARMS=(
   "disp_bob1|+arm=bob +field +mode=1 +parity=1 +want=$G/disp_want_bob1.hex"
   "disp_single_w|+arm=single +field +single +mode=0 +parity=1 +want=$G/disp_want_bob1.hex"
   "disp_single_l|+arm=single +field +single +mode=2 +parity=0 +want=$G/disp_want_bob0.hex"
-  "disp_il|+arm=il +il"
-  "disp_il_field|+arm=il +il +field +mode=2 +want=$G/disp_want_field.hex"
+  "disp_il|+arm=il +il +want=$G/disp_want_frame_il.hex"
+  "disp_il_field|+arm=il +il +field +mode=2 +want=$G/disp_want_field_il.hex"
   "disp_colswap|+arm=colour +colswap=3"
 )
 for c in 2 3 4 5 6; do DISP_ARMS+=("disp_c$c|+arm=colour +colour=$c +want=$G/disp_want_frame_c$c.hex"); done
+# (docs/chroma.md) the frame at every other chroma siting (both fields' types t: 9 t), and a field pair whose
+# fields differ (top 0, bottom 2: 16)
+for t in 1 2 3 4 5; do DISP_ARMS+=("disp_s$t|+arm=rgb +siting=$((9 * t)) +want=$G/disp_want_frame_s$t.hex"); done
+DISP_ARMS+=("disp_field_s16|+arm=field +field +siting=16 +want=$G/disp_want_field_s16.hex")
 # the fitted cases (P6 step 3): their plusargs from the golden's case table
 fit_args() {   # name -> the plusargs of that case
   local line; line=$(grep "^$1 " $G/disp_fit_cases.txt)
@@ -186,7 +197,7 @@ fit_args() {   # name -> the plusargs of that case
   [ "${12}" = 1 ] && a="$a +il"
   [ "${13}" = 1 ] && a="$a +at"
   [ "${14}" = 1 ] && a="$a +pal"
-  echo "$a +flt=${15}"
+  echo "$a +flt=${15} +siting=${16}"
 }
 for c in $(cut -d' ' -f1 $G/disp_fit_cases.txt); do DISP_ARMS+=("disp_fit_$c|$(fit_args "$c")"); done
 # (hdmi_raster stage 2) the native cases: raster_geom's raster, the picture 1:1 on it
@@ -196,7 +207,7 @@ nat_args() {   # name -> the plusargs of that case
   local a="+arm=nat +store=$G/disp_store_nat_$1.hex +want=$G/disp_want_nat_$1.hex +w=$2 +hf=$3 +cl=$5 +cr=$6 +ct=$7 +cb=$8 +sarw=$9 +sarh=${10} +fmode=2"
   [ "$4" = 1 ] && a="$a +cuy4"
   [ "${11}" = 2 ] && a="$a +pal"
-  echo "$a +nat +nw=${12} +nh=${13} +nl=${14} +nnt=${15} +nlast=${16}"
+  echo "$a +nat +nw=${12} +nh=${13} +nl=${14} +nnt=${15} +nlast=${16} +siting=${17}"
 }
 for c in $(cut -d' ' -f1 $G/disp_nat_cases.txt); do DISP_ARMS+=("disp_$c|$(nat_args "$c")"); done
 for a in "${DISP_ARMS[@]}"; do disp_arm "${a%%|*}" "${a#*|}" & throttle; done
@@ -251,22 +262,18 @@ PYEOF
   mut X12 $M "if (b_req && !orphan && ((a_rd_acc)" "if (b_req && ((a_rd_acc)" $MT "ddr" "$MODEL" "+need_full +lat_min=60 +lat_max=90 +wait_pct=5" & throttle
   O="h264/sync_gen.sv h264/disp_fit.sv $MODEL"
   mut D1 $D "cf_rv <= 10'd409;" "cf_rv <= 10'd408;" $DT "rgb" "$O" & throttle
-  mut D2 $D ": {1'b0, fr_c[11:1]};" ": {fr_c};" $DT "rgb" "$O" & throttle
   mut D3 $D "wire  [1:0]  e_sa = dot0 ? nx_sa : cur_sa, e_sb = dot0 ? nx_sb : cur_sb," "wire  [1:0]  e_sa = dot0 ? nx_sa : cur_sa, e_sb = cur_sb," $DT "rgb" "$O" & throttle
-  mut D4 $D "wire  [11:0] c_row = (m_dv == 2'd0 && m_field) ?" "wire  [11:0] c_row = (1'b0) ?" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
-  mut D5 $D "{1'b0, fr_c[11:2], fr_c[0]}" "{1'b0, fr_c[11:2], !fr_c[0]}" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
   mut K1 $D "{1'd0, s4_hb, 1'b0} + {2'd0, s4_hd} + 10'd1;" "{1'd0, s4_hb, 1'b0} + {2'd0, s4_hd} + 10'd2;" $DT "blend" "$O" "$BL" & throttle
-  mut K2 $D "(s4_k == 2'd2) ? ul[9:2]" "(s4_k == 2'd2) ? s4_ub" $DT "blend" "$O" "$BL" & throttle
   mut K3 $D "(e_par == pic_parity)" "(e_par != pic_parity)" $DT "bob" "$O" "+arm=bob +field +mode=1 +parity=0 +want=$G/disp_want_bob0.hex" & throttle
   mut K4 $D "wire  [8:0]  ym = {1'd0, s4_ya} + {1'd0, s4_hd} + 9'd1;" "wire  [8:0]  ym = {1'd0, s4_ya} + {1'd0, s4_hd};" $DT "bob" "$O" "+arm=bob +field +mode=1 +parity=1 +want=$G/disp_want_bob1.hex" & throttle
   mut K5 $D "ln_ra <= (ln_k0 == kmin_y) ? ((ln_k0 == kmax_y) ? ln_k0 : ln_k0 + 12'd1) : ln_k0 - 12'd1;" "ln_ra <= ln_k0 - 12'd1;" $DT "blend" "$O" "$BL" & throttle
   mut K6 $D "ln_rd <= (ln_k0 == kmax_y) ? ((ln_k0 == kmin_y) ? ln_k0 : ln_k0 - 12'd1) : ln_k0 + 12'd1;" "ln_rd <= ln_k0 + 12'd1;" $DT "blend" "$O" "$BL" & throttle
   mut K8 $D "wire         kern_ok_now = ident && pic_field;" "wire         kern_ok_now = ident;" $DT "pass" "$O" "+arm=pass +mode=2 +parity=1" & throttle
   mut K9 $D "wire         bob  = pic_field && (pic_single || k_mode == 2'd1);" "wire         bob  = pic_field && (k_mode == 2'd1);" $DT "single" "$O" "+arm=single +field +single +mode=0 +parity=1 +want=$G/disp_want_bob1.hex" & throttle
-  mut K10 $D "if (ln_first) begin tag_v <= '0; k_mode <= deint_mode; k_col <= pic_colour; end" "if (ln_first) begin tag_v <= '0; k_mode <= 2'd0; k_col <= pic_colour; end" $DT "blend" "$O" "$BL" & throttle
+  mut K10 $D "if (ln_first) begin tag_v <= '0; ctag_v <= '0; k_mode <= deint_mode; k_col <= pic_colour; k_sit <= pic_siting; end" "if (ln_first) begin tag_v <= '0; ctag_v <= '0; k_mode <= 2'd0; k_col <= pic_colour; k_sit <= pic_siting; end" $DT "blend" "$O" "$BL" & throttle
   wait
-  mut I1 $D "else if (!il || (h_pos[0] && h_pos != 12'd1)) xacc <=" "else if (1'b1) xacc <=" $DT "il" "$O" "+arm=il +il" & throttle
-  mut I2 $D "wire         ident = !il && (r_sx" "wire         ident = (r_sx" $DT "il" "$O" "+arm=il +il +field +mode=2 +want=$G/disp_want_field.hex" & throttle
+  mut I1 $D "else if (!il || (h_pos[0] && h_pos != 12'd1)) xacc <=" "else if (1'b1) xacc <=" $DT "il" "$O" "+arm=il +il +want=$G/disp_want_frame_il.hex" & throttle
+  mut I2 $D "wire         ident = !il && (r_sx" "wire         ident = (r_sx" $DT "il" "$O" "+arm=il +il +field +mode=2 +want=$G/disp_want_field_il.hex" & throttle
   mut R1 $D "s3_db * \$signed({1'b0, s3_w})" "s3_db * \$signed(9'sd0)" $DT "fit" "$O" "$(fit_args p640)" & throttle
   mut R2 $D "{1'b0, s4_hd} * {1'b0, s4_wy}" "{1'b0, s4_hb} * {1'b0, s4_wy}" $DT "fit" "$O" "$(fit_args v)" & throttle
   mut R3 $D "3'd1: out_l[i] = (hq[i] + 21'd64)   >> 7;" "3'd1: out_l[i] = hq[i] >> 7;" $DT "fit" "$O" "$(fit_args wide)" & throttle
@@ -274,14 +281,12 @@ PYEOF
   mut R5 $D "pos0_c <= \$signed({17'd0, r_lx, 16'd0})" "pos0_c <= \$signed(45'sd0)" $DT "fit" "$O" "$(fit_args w)" & throttle
   mut H1 $D "store_base = DPB_BASE + {6'd0, m_store, 18'd0};" "store_base = DPB_BASE + {7'd0, m_store, 17'd0};" $DT "fit|ddr" "$O" "$(fit_args hd)" & throttle
   mut H2 $D "store_base + {3'd0, pm_r, 5'd0} + {5'd0, pm_r, 3'd0} + lc_r;" "store_base + {12'd0, 17'({3'd0, pm_r, 5'd0} + {5'd0, pm_r, 3'd0})} + lc_r;" $DT "fit" "$O" "$(fit_args hd)" & throttle
-  mut R6 $D "wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;" "wire  [10:0] c_t  = x_k0;" $DT "fit" "$O" "$(fit_args p640)" & throttle
   wait
   mut R7 $D "pos0_p <= pos0_a + (pos0_b <<< 14);" "pos0_p <= 45'sd0;" $DT "fit" "$O" "$(fit_args v)" & throttle
   mut R9 $D "wire         cmd_pending = (cmd_done_s2 != cmd_tog);" "wire         cmd_pending = 1'b1;" $DT "late" "$O" & throttle
   mut R10 $D "ln_pt <= \$signed({16'd0, r_ty, 16'd0}) + ln_prod" "ln_pt <= ln_prod" $DT "fit" "$O" "$(fit_args v)" & throttle
   mut T1 $D "wire  [4:0]  rows_m1 = ((plane == 2'd0 && m_vpf != 3'd0) ? {dv_n, 1'b0} : {1'b0, dv_n}) - 5'd1;" "wire  [4:0]  rows_m1 = {1'b0, dv_n} - 5'd1;" $DT "fit" "$O" "$(fit_args at_id)" & throttle
   mut T2 $D "c_vo   <= ({40'd0, (4'd1 << r_dv) - 4'd1} << 15) + ({40'd0, sh_v} << (5'd13 + {3'd0, r_dv}));" "c_vo   <= ({40'd0, (4'd1 << r_dv) - 4'd1} << 15);" $DT "fit" "$O" "$(fit_args at_w)" & throttle
-  mut T3 $D "nx_sc <= (!ident && ({1'b0, ln_w} + {1'b0, sh_v[2:0], 5'd0} >= 9'd128)) ? lk_d_s : lk_b_s;" "nx_sc <= (!ident && ln_w >= 8'd128) ? lk_d_s : lk_b_s;" $DT "fit" "$O" "$(fit_args at_v)" & throttle
   wait
   mut T4 $D "kmax_y <= tyh_d - {10'd0, nx_v};" "kmax_y <= tyh_d;" $DT "fit" "$O" "$(fit_args at_id)" & throttle
   mut T5 $D "3'd0: out_l[i] = (hq[i] + 21'd32)   >> 6;" "3'd0: out_l[i] = hq[i] >> 6;" $DT "fit" "$O" "$(fit_args at_id)" & throttle
@@ -295,7 +300,6 @@ PYEOF
   mut F1 $D "3'd3:    had[i] = {{3{hdf[i][17]}}, hdf[i]} + {{2{hdf[i][17]}}, hdf[i], 1'b0};" "3'd3:    had[i] = {{2{hdf[i][17]}}, hdf[i], 1'b0};" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F2 $D "                    hf_v <= hn_end;" "                    hf_v <= 1'b0;" $DT "fit" "$O" "$(fit_args port_area)" & throttle
   mut F3 $D "!f_box          ? 4'd8 - {1'b0, m_vpf} : {1'b0, m_vpf};" "!f_box          ? 4'd8 : {1'b0, m_vpf};" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
-  mut F4 $D "wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;" "wire  [10:0] c_t  = ({1'b0, x_w} >= 9'd128) ? x_k1 : x_k0;" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F5 $D "wire  [4:0]  rows_m1 = ((plane == 2'd0 && m_vpf != 3'd0) ? {dv_n, 1'b0} : {1'b0, dv_n}) - 5'd1;" "wire  [4:0]  rows_m1 = ((plane == 2'd0 && m_vpf == 3'd4) ? {dv_n, 1'b0} : {1'b0, dv_n}) - 5'd1;" $DT "fit" "$O" "$(fit_args port_area)" & throttle
   mut F6 $D " - 45'sd32768 - \$signed({20'd0, c_ho});" " - 45'sd32768;" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F7 $D "        hx[8] = hf_v ? hp[7] : hn[0];" "        hx[8] = hp[7];" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
@@ -311,6 +315,22 @@ PYEOF
   wait
   mut C7 $D "        case (k_col)" "        case (3'd1)" $DT "colour" "$O" "$(ca 3)" & throttle
   mut C8 $D "        case (k_col)" "        case (pic_colour)" $DT "colour" "$O" "+arm=colour +colswap=3" & throttle
+  wait
+  # (docs/display.md "Chroma at the identity") chroma interpolated at the identity fit
+  wait
+  # (docs/chroma.md) the chroma resampler, each on the arm that must see it
+  mut N1 $D "s3_du0 * \$signed({1'b0, s3_cwx})" "s3_du0 * \$signed(9'sd0)" $DT "rgb" "$O" & throttle
+  mut N2 $D "wire  [8:0]  iwc  = 9'd256 - {1'b0, s4_cwy};" "wire  [8:0]  iwc  = 9'd256;" $DT "rgb" "$O" & throttle
+  mut N3 $D "c_r0 <= cfield ? {c_k0[10:0], c_cp} : c_k0;" "c_r0 <= c_k0;" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
+  mut N4 $D "wire         c_cpn  = c_bob ? pic_parity : c_pn;" "wire         c_cpn  = c_pn;" $DT "bob" "$O" "+arm=bob +field +mode=1 +parity=0 +want=$G/disp_want_bob0.hex" & throttle
+  mut N5 $D "(cfield && c_cpn) ? k_sit[5:3] : k_sit[2:0]" "k_sit[2:0]" $DT "field" "$O" "+arm=field +field +siting=16 +want=$G/disp_want_field_s16.hex" & throttle
+  mut N6 $D "(c_typ <= 3'd3) ? 17'h00000 : 17'h10000" "(c_typ <= 3'd3) ? 17'h00000 : 17'h00000" $DT "rgb" "$O" "+arm=rgb +siting=45 +want=$G/disp_want_frame_s5.hex" & throttle
+  wait
+  mut N7 $D "pos0c1 <= pos0c0 - 45'sd32768;" "pos0c1 <= pos0c0;" $DT "rgb" "$O" "+arm=rgb +siting=9 +want=$G/disp_want_frame_s1.hex" & throttle
+  mut N8 $D " - \$signed({25'd0, (4'd1 << r_dh) - 4'd1, 16'd0});" ";" $DT "fit" "$O" "$(fit_args hd)" & throttle
+  mut N9 $D "(s0_ck + 29'sd1 > \$signed({17'd0, ckmax_x})) ? ckmax_x[9:0] : s0_ck[9:0] + 10'd1;" "s0_ck[9:0] + 10'd1;" $DT "rgb" "$O" & throttle
+  mut N10 $D ": (ln_pos - \$signed({24'd0, (4'd1 << r_dv) - 4'd1, 16'd0}));" ": ln_pos;" $DT "fit" "$O" "$(fit_args tall)" & throttle
+  mut N11 $D "wire  [14:0] c_src0 = {3'd0, f_crow} << m_dv;" "wire  [14:0] c_src0 = {3'd0, f_crow};" $DT "fit" "$O" "$(fit_args tall)" & throttle
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

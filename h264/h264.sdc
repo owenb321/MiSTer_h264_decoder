@@ -48,8 +48,9 @@ set_max_delay -from [get_keepers {*dpb_mem:*|wl_g*}] -to [get_keepers {*dpb_mem:
 # omitted with PR fj#32, they were timed as a 90 / 81 MHz cross-PLL transfer, -7.2 ns -- never a real path).
 # And back: the done toggle's first stage (P6 step 3: fetch_late).
 set_max_delay -from [get_keepers {*disp_reader:*|cmd_tog*}] -to [get_keepers {*disp_reader:*|m_tog[0]*}] 12.000
-set_max_delay -from [get_keepers {*disp_reader:*|cmd_* *raster_dn_xing|dst_data*}] \
-              -to [get_keepers {*disp_reader:*|m_store* *disp_reader:*|m_w[* *disp_reader:*|m_hf* *disp_reader:*|m_field* *disp_reader:*|m_valid* *disp_reader:*|m_first* *disp_reader:*|m_par* *disp_reader:*|m_dh* *disp_reader:*|m_dv* *disp_reader:*|m_hpf* *disp_reader:*|m_vpf* *disp_reader:*|m_slide* *disp_reader:*|m_n* *disp_reader:*|m_row* *disp_reader:*|m_slot* *disp_reader:*|fc_* *disp_reader:*|fetch_changes*}] 12.000
+# (docs/chroma.md §3) the command's chroma rows (ccmd_* -> m_cn / m_crow / m_cslot) cross with it, the same way
+set_max_delay -from [get_keepers {*disp_reader:*|cmd_* *disp_reader:*|ccmd_* *raster_dn_xing|dst_data*}] \
+              -to [get_keepers {*disp_reader:*|m_store* *disp_reader:*|m_w[* *disp_reader:*|m_hf* *disp_reader:*|m_field* *disp_reader:*|m_valid* *disp_reader:*|m_first* *disp_reader:*|m_par* *disp_reader:*|m_dh* *disp_reader:*|m_dv* *disp_reader:*|m_hpf* *disp_reader:*|m_vpf* *disp_reader:*|m_slide* *disp_reader:*|m_n* *disp_reader:*|m_row* *disp_reader:*|m_slot* *disp_reader:*|m_cn* *disp_reader:*|m_crow* *disp_reader:*|m_cslot* *disp_reader:*|fc_* *disp_reader:*|fetch_changes*}] 12.000
 set_max_delay -from [get_keepers {*disp_reader:*|done_tog*}] -to [get_keepers {*disp_reader:*|cmd_done_s1*}] 12.000
 
 # cdc_snap (h264/cdc.sv): the handshake's two synchroniser first stages, and the copy of the

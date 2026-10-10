@@ -359,6 +359,22 @@
 #     --release --compile with SEED 12 pinned reproduced 103.15/102.38, clk_vid 93.62/94.43 PASS; ungated: clk_sys ->
 #     clk_vid analog_want_l / status[6] -> ary[7] -0.206 / -0.086 at 100 C (quasi-static settings flags; seed placement);
 #     H264_20261009.rbf, smoke-tested on .201 (docs/history.md S42).
+#   2026-10-10 (feature/chroma-interp 8be5f1e: chroma interpolated at the identity fit, docs/display.md "Chroma at
+#     the identity"; CORE_VERSION dev-chroma): SEED 12 first roll 94.17/95.05 MARGINAL, clk_vid 81.61/82.52 FAIL (gate 86)
+#     -- clk_vid's worst paths the new ahead index ((x_k0 + 1) >> 1 vs kmax >> 1) into the chroma RAMs' address;
+#     replaced by the second tap (x_k1 >> 1), same index; ALM 37,980 (91 %), RAM 413, DSP 103,
+#     H264_chroma_MARGINAL_20261010_0524.rbf.
+#     20783a8 (the second tap as the ahead index): SEED 12 100.1/96.1 MARGINAL, clk_vid 95.82/93.39 PASS (fixed),
+#     H264_chroma_MARGINAL_20261010_0618.rbf; sweep (detached: setsid, never under a killable task): **SEED 5 first,
+#     103.33/104.01 PASS**, clk_vid 96.31/95.39 PASS, clk_mem 94.02/91.07 (ungated); ALM 38,139 (91 %), RAM 413, DSP 103,
+#     H264_chromasweep_20261010_0632.rbf (00cb7e2). SEED 5 pinned.
+#   2026-10-10 (the full version, docs/chroma.md: the siting from the SPS, chroma in its own 8 slots, bilinear
+#     on every output): d9220af SEED 5 first roll clk_dec PASS but clk_vid 62.51/61.11 and clk_mem -7.17 ns --
+#     the chroma allocation's running minimum over 8 slots (made parallel) and the chroma command's crossing
+#     unbounded in h264.sdc (ccmd_* -> m_c*: bounded), H264_chroma_MARGINAL_20261010_1633.rbf; a83a388 SEED 5
+#     99.98/96.79 MARGINAL, clk_vid 94.53/93.59 PASS (H264_chroma_MARGINAL_20261010_1710.rbf); sweep (detached):
+#     12 100.51/100.35, 13 102.3/100.92, **SEED 2 102.15/102.45 PASS**, clk_vid 96.94/91.46 PASS; ALM 39,040 (93 %),
+#     RAM 421, DSP 109, H264_chromafull_20261010_1752.rbf (a83a388). SEED 2 pinned.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -461,4 +477,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 12
+set_global_assignment -name SEED 2

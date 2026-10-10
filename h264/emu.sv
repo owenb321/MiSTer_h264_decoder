@@ -171,7 +171,7 @@ assign LOCKED    = locked & vid_locked;
 //     30 chars and splits CONF_STR on those characters.
 //   * This string is INSIDE CONF_STR = inside the netlist. Changing it re-rolls the
 //     pinned fitter SEED, so change it once per branch and never per commit.
-`define CORE_VERSION "v1.0.0"
+`define CORE_VERSION "dev-chroma"
 
 // The OSD definition. Every option, button and file extension here MUST be documented
 // in the manual: tools/docs_check.py parses this block (by its terminator, never a
@@ -646,6 +646,7 @@ wire  [4:0] v_sh_store;
 wire  [7:0] v_sh_w, v_sh_hf;
 wire  [1:0] v_deint;                      // ... the Deinterlace menu
 wire  [2:0] v_colour;                     // ... (0.16) the shown picture's colour code
+wire  [5:0] v_siting;                     // ... (docs/chroma.md §4) and its chroma siting
 wire [12:0] v_fit_ow, v_fit_oh;           // ... the fit (disp_fit)
 wire [13:0] v_fit_ox0, v_fit_oy0;
 wire [27:0] v_fit_sx, v_fit_sy;
@@ -777,6 +778,7 @@ wire [39:0] pi_aspect;
 wire  [2:0] pi_colour;              // (0.16) recon_top: the picture's colour code, its flag and tags
 wire        pi_col_unsup;
 wire [25:0] pi_col_tags;
+wire  [5:0] pi_siting;              // (docs/chroma.md §4) recon_top: the picture's chroma siting
 wire  [3:0] pi_ps;
 wire [32:0] pi_pts;
 wire        em_valid, em_unpaired, em_first_bot, em_frame, em_dec_t, em_dec_b, rc_eos_done;
@@ -828,6 +830,7 @@ recon_top #(.DPB_BASE(29'h0640_0000)) recon_top_inst (
 	.pinfo_colour     (pi_colour),          // (0.16, docs/colour.md)
 	.pinfo_col_unsup  (pi_col_unsup),
 	.pinfo_col_tags   (pi_col_tags),
+	.pinfo_siting     (pi_siting),          // (chroma.md §4)
 	.pinfo_timing_v   (pi_timing_v),
 	.pinfo_nuit       (pi_nuit),
 	.pinfo_ts         (pi_ts),
@@ -883,6 +886,7 @@ wire [39:0] po_aspect;
 wire  [2:0] po_colour;              // (0.16) pic_in's mux
 wire        po_col_unsup;
 wire [25:0] po_col_tags;
+wire  [5:0] po_siting;              // (chroma.md §4) pic_in's mux (a program's picture: 0)
 wire  [3:0] po_ps;
 wire [32:0] po_pts;
 wire        po_valid, po_unpaired, po_first_bot, po_frame, po_dec_t, po_dec_b, po_eos_done;
@@ -923,6 +927,7 @@ pic_in #(.NST(20)) pic_in_inst (
 	.r_pinfo_colour   (pi_colour),          // (0.16)
 	.r_pinfo_col_unsup(pi_col_unsup),
 	.r_pinfo_col_tags (pi_col_tags),
+	.r_pinfo_siting   (pi_siting),          // (chroma.md §4)
 	.r_pinfo_timing_v (pi_timing_v),
 	.r_pinfo_nuit     (pi_nuit),
 	.r_pinfo_ts       (pi_ts),
@@ -949,6 +954,7 @@ pic_in #(.NST(20)) pic_in_inst (
 	.pinfo_colour     (po_colour),          // (0.16)
 	.pinfo_col_unsup  (po_col_unsup),
 	.pinfo_col_tags   (po_col_tags),
+	.pinfo_siting     (po_siting),          // (chroma.md §4)
 	.pinfo_timing_v   (po_timing_v),
 	.pinfo_nuit       (po_nuit),
 	.pinfo_ts         (po_ts),
@@ -988,6 +994,7 @@ wire [39:0] rq_aspect;
 wire  [2:0] rq_colour;              // (0.16) recon_out: the store's colour code, flag and tags
 wire        rq_col_unsup;
 wire [25:0] rq_col_tags;
+wire  [5:0] rq_siting;              // (docs/chroma.md §4) recon_out: the store's chroma siting
 wire [40:0] rq_crop;          // P6: the store's crop, to the fit (docs/analog.md §5)
 wire [31:0] rq_nuit, rq_ts;
 wire  [3:0] rq_ps_a, rq_ps_b;
@@ -1009,6 +1016,7 @@ recon_out #(.NST(20)) recon_out_inst (
 	.pinfo_colour   (po_colour),            // (0.16)
 	.pinfo_col_unsup(po_col_unsup),
 	.pinfo_col_tags (po_col_tags),
+	.pinfo_siting   (po_siting),            // (chroma.md §4)
 	.pinfo_timing_v (po_timing_v),
 	.pinfo_nuit     (po_nuit),
 	.pinfo_ts       (po_ts),
@@ -1049,6 +1057,7 @@ recon_out #(.NST(20)) recon_out_inst (
 	.rec_colour     (rq_colour),            // (0.16)
 	.rec_col_unsup  (rq_col_unsup),
 	.rec_col_tags   (rq_col_tags),
+	.rec_siting     (rq_siting),            // (chroma.md §4)
 	.rec_timing_v   (rq_timing_v),
 	.rec_nuit       (rq_nuit),
 	.rec_ts         (rq_ts),
@@ -1077,6 +1086,7 @@ wire  [7:0] sh_w, sh_hf;
 wire [39:0] sh_aspect;
 wire  [2:0] sh_colour;              // (0.16) disp_ctl: the shown picture's colour code (word 80) and tags (word 86)
 wire [25:0] sh_col_tags;
+wire  [5:0] sh_siting;              // (chroma.md §4) disp_ctl: the shown picture's chroma siting
 wire [15:0] disp_col_unsup;         // (0.16) pictures taken whose matrix is not supported (word 86)
 wire [40:0] sh_crop;
 wire [15:0] fit_sar_w, fit_sar_h;   // P6: the resolved SAR (1:1 unspecified; aspect_vui below), to the fit
@@ -1125,6 +1135,7 @@ disp_ctl disp_ctl_inst (
 	.rec_colour     (rq_colour),            // (0.16)
 	.rec_col_unsup  (rq_col_unsup),
 	.rec_col_tags   (rq_col_tags),
+	.rec_siting     (rq_siting),            // (chroma.md §4)
 	.rec_timing_v   (rq_timing_v),
 	.rec_nuit       (rq_nuit),
 	.rec_ts         (rq_ts),
@@ -1149,6 +1160,7 @@ disp_ctl disp_ctl_inst (
 	.sh_aspect      (sh_aspect),
 	.sh_colour      (sh_colour),            // (0.16)
 	.sh_col_tags    (sh_col_tags),
+	.sh_siting      (sh_siting),            // (chroma.md §4)
 	.n_col_unsup    (disp_col_unsup),
 	.n_dc           (disp_dc),
 	.n_pick         (disp_pick),
@@ -1322,6 +1334,7 @@ disp_reader #(.DPB_BASE(29'h0640_0000)) disp_reader_inst (
 	.pic_single        (v_sh_single),
 	.deint_mode        (v_deint),            // Deinterlace: Weave / Bob / Blend (latched per frame)
 	.pic_colour        (v_colour),           // (0.16, docs/colour.md) the shown picture's colour code, latched per refresh
+	.pic_siting        (v_siting),           // (docs/chroma.md) its chroma siting, latched with it
 	.fit_ow            (v_fit_ow),
 	.fit_oh            (v_fit_oh),
 	.fit_ox0           (v_fit_ox0),
@@ -1574,20 +1587,20 @@ assign raster_pal     = (raster_std == 2'd2);
 // at a frame's first dot, the deinterlace mode / the overlay's settings at a refresh's first line --
 // all long after the copy has settled.
 localparam int XW_DN = 1 + 1 + 2 + 1 + 5*12 + 1 + 5 + 1 + 8 + 8 + 1 + 1 + 2 + 3 +
-                       13 + 13 + 14 + 14 + 28 + 28 + 2 + 2 + 12 + 12 + 12 + 12 + 3 + 3 + 1 + 1 + 1;
+                       13 + 13 + 14 + 14 + 28 + 28 + 2 + 2 + 12 + 12 + 12 + 12 + 3 + 3 + 1 + 1 + 1 + 6;
 wire [XW_DN-1:0] xdn_src = {interlaced_eff, raster_pal, raster_std,
                             geom_nat, geom_rw, geom_rh, geom_l, geom_nt, geom_last,
                             sh_valid, sh_store, sh_field, sh_w, sh_hf, sh_parity, sh_single, status[4:3], sh_colour,
                             fit_ow, fit_oh, fit_ox0, fit_oy0, fit_sx, fit_sy, fit_dh_l2, fit_dv_l2,
                             fit_lx, fit_ty, fit_wc, fit_hc, fit_hpf, fit_vpf,
-                            rr_sess, (at_opt != 2'd1), idle_vis};
+                            rr_sess, (at_opt != 2'd1), idle_vis, sh_siting};
 wire [XW_DN-1:0] xdn_dst;
 assign {v_il, v_pal, v_std,
         v_nat, v_rw, v_rh, v_l, v_nt, v_last,
         v_sh_valid, v_sh_store, v_sh_field, v_sh_w, v_sh_hf, v_sh_parity, v_sh_single, v_deint, v_colour,
         v_fit_ow, v_fit_oh, v_fit_ox0, v_fit_oy0, v_fit_sx, v_fit_sy, v_fit_dh_l2, v_fit_dv_l2,
         v_fit_lx, v_fit_ty, v_fit_wc, v_fit_hc, v_fit_hpf, v_fit_vpf,
-        v_sess, v_at_en, v_idle_vis} = xdn_dst;
+        v_sess, v_at_en, v_idle_vis, v_siting} = xdn_dst;
 cdc_snap #(.W(XW_DN)) raster_dn_xing (
 	.src_clk   (clk_sys),
 	.src_rst_n (lock_sys_n),

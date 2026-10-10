@@ -163,7 +163,7 @@ def fit(w_mbs, hf_mbs, crop=(0, 0, 0, 0, 0), sar_w=1, sar_h=1, mode='letterbox',
     return dict(wc=wc, hc=hc, lx=lx, ty=ty, crop_bad=crop_bad, wide=wide, snap=snap, clamp=clamp, lb=lb,
                 ow=ow, oh=oh, ox0=ox0, oy0=oy0, sx=sx, sy=sy, dh=dh, dv=dv,
                 wd=cw // dh, slide=bool(at), rh=nh if nat else RH, rw=nw if nat else RW,
-                flt=flt, hpf=hpf, vpf=vpf)
+                flt=flt, hpf=hpf, vpf=vpf, il=bool(il))
 
 
 def src_pos(f, j, axis):
