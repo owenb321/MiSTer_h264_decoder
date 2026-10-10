@@ -108,8 +108,119 @@ def up_ident(c):
 
 
 def up_field(c):
-    """one field's chroma at the identity: horizontal only (vertically nearest within the field)"""
+    """(the identity step's form, superseded: horizontal only, vertically nearest within the field)"""
     return np.repeat(hup(c), 2, 0)
+
+
+# ---- CHROMA (docs/chroma.md): siting-aware bilinear on every output --------------------------------
+# Written from the design (chroma.md §2), Q.16 integers as the reader keeps them:
+#   the luma source position X = (lx << 16) + j sx + (sx >> 1) - 2^15 (the UNSHIFTED one: the Area
+#   pre-filter and anti-twitter shift luma only), Y likewise with ty / sy;
+#   a frame (or a field store at dv > 1, woven): cx = (X - ((dh - 1) << 16) - HOFF) >> (log2 dh + 1),
+#   cy = (Y - ((dv - 1) << 16) - VOFF) >> (log2 dv + 1) -- decimated chroma samples / rows;
+#   a store of fields at dv = 1: the field p of the row nearest Y (Bob's rebuilt line: the kept field),
+#   its own coordinates Yf = (Y - (p << 16)) >> 1, cy = (Yf - VOFF_p) >> 1, the store's rows 2 k + p;
+#   taps k = floor, k + 1, the weight the next 8 bits; below the crop both the first and weight 0,
+#   above it the last; h = (a (256 - w) + b w + 128) >> 8 on both rows, then the same vertically.
+# The siting (chroma_sample_loc_type, E.2.1): horizontally 1 / 3 / 5 centred (+1/2 luma sample), 0 / 2 / 4
+# co-sited; vertically 0 / 1 between the rows (+1/2), 2 / 3 the top row (0), 4 / 5 the bottom (+1).
+HOFF = {0: 0, 1: 1 << 15, 2: 0, 3: 1 << 15, 4: 0, 5: 1 << 15}
+VOFF = {0: 1 << 15, 1: 1 << 15, 2: 0, 3: 0, 4: 1 << 16, 5: 1 << 16}
+
+
+def clerp(a, b, w):
+    return (a * (256 - w) + b * w + 128) >> 8
+
+
+def ctaps(q, cmin, cmax):
+    q = np.asarray(q, np.int64)
+    k, w = q >> 16, (q >> 8) & 0xFF
+    below = k < cmin
+    return (np.where(below, cmin, np.minimum(k, cmax)), np.where(below, cmin, np.minimum(k + 1, cmax)),
+            np.where(below, 0, w))
+
+
+def chroma_line(Ud, Vd, f, L, xs, sit=(0, 0), field=False, bobkeep=None, want_pos=False):
+    """raster line L's chroma at raster columns xs (an array) under the fit f; Ud / Vd the decimated
+    chroma planes, their rows the store's decimated chroma rows; sit = (top / frame, bottom) types"""
+    t, b = sit
+    dh, dv = f['dh'], f['dv']
+    dhl, dvl = dh.bit_length() - 1, dv.bit_length() - 1
+    Yq = (f['ty'] << 16) + (L - f['oy0']) * f['sy'] + (f['sy'] >> 1) - (1 << 15)
+    if field and dv == 1:
+        p = ((Yq + (1 << 15)) >> 16) & 1
+        if bobkeep is not None:
+            p = bobkeep
+        typ = t if p == 0 else b
+        cq = (((Yq - (p << 16)) >> 1) - VOFF[typ]) >> 1
+        k0, k1, wy = ctaps(cq, f['ty'] >> 2, ((f['ty'] + f['hc']) >> 2) - 1)
+        r0, r1 = 2 * int(k0) + p, 2 * int(k1) + p
+    else:
+        typ = t
+        cq = (Yq - ((dv - 1) << 16) - VOFF[t]) >> (dvl + 1)
+        k0, k1, wy = ctaps(cq, f['ty'] >> (dvl + 1), (((f['ty'] + f['hc']) >> 1) - 1) >> dvl)
+        r0, r1 = int(k0), int(k1)
+    wy = int(wy)
+    Xq = (f['lx'] << 16) + (np.asarray(xs) - f['ox0']) * f['sx'] + (f['sx'] >> 1) - (1 << 15)
+    cx = (Xq - ((dh - 1) << 16) - HOFF[typ]) >> (dhl + 1)
+    c0, c1, wx = ctaps(cx, f['lx'] >> (dhl + 1), (((f['lx'] + f['wc']) >> 1) - 1) >> dhl)
+    out = []
+    for C in (Ud, Vd):
+        out.append(clerp(clerp(C[r0, c0], C[r0, c1], wx), clerp(C[r1, c0], C[r1, c1], wx), wy))
+    if want_pos:
+        out.append((r0, r1, wy, c0, c1, wx))
+    return out
+
+
+def ident_fit(W, H):
+    import disp_fit_ref as _frr
+    f = _frr.fit(W // 16, H // 16, mode='fit')
+    assert f['sx'] == f['sy'] == 1 << 16 and f['dh'] == f['dv'] == 1 and f['ox0'] == f['oy0'] == 0, "not the identity"
+    return f
+
+
+def chroma_planes(Cb, Cr, f, sit=(0, 0), field=False, bobkeep=None, H=None, W=None):
+    """every raster line's chroma over the whole picture (the identity fixtures: raster = picture)"""
+    H = 2 * Cb.shape[0] if H is None else H
+    W = 2 * Cb.shape[1] if W is None else W
+    U = np.zeros((H, W), np.int64)
+    V = np.zeros((H, W), np.int64)
+    xs = np.arange(W)
+    for y in range(H):
+        U[y], V[y] = chroma_line(np.asarray(Cb, np.int64), np.asarray(Cr, np.int64), f, y, xs, sit, field, bobkeep)[:2]
+    return U, V
+
+
+def check_positions():
+    """docs/chroma.md §2's worked positions -- an off-by-half hides here"""
+    f = dict(lx=0, ty=0, wc=64, hc=64, ox0=0, oy0=0, sx=1 << 16, sy=1 << 16, dh=1, dv=1)
+    C = np.arange(32 * 32).reshape(32, 32)
+    def pos(L, x, sit, field=False, keep=None):
+        return chroma_line(C, C, f, L, np.array([x]), sit, field, keep, want_pos=True)[2]
+    # horizontally: type 0 X = 2n -> n, w 0; X = 2n + 1 -> n, n + 1, w 128; type 1 X = 2n -> n - 1, n, w 192
+    def hx(x, t):
+        r = pos(9, x, (t, t)); return int(r[3][0]), int(r[4][0]), int(r[5][0])
+    def vy(L, t, field=False, keep=None):
+        r = pos(L, 4, (t, t), field, keep); return r[0], r[1], r[2]
+    assert hx(10, 0) == (5, 6, 0) and hx(11, 0) == (5, 6, 128), "type 0 horizontally"
+    assert hx(10, 1) == (4, 5, 192) and hx(11, 1) == (5, 6, 64), "type 1 horizontally"
+    assert vy(10, 0) == (4, 5, 192) and vy(11, 0) == (5, 6, 64), "voff 1/2 vertically"
+    assert vy(10, 2) == (5, 6, 0) and vy(11, 2) == (5, 6, 128), "voff 0 (types 2, 3)"
+    assert vy(10, 4) == (4, 5, 128) and vy(11, 4) == (5, 6, 0), "voff 1 (types 4, 5)"
+    # a field store (dv 1), type 0: frame line 10 is field 0's row 5 -> field chroma 2.25 -> rows 2 / 3 of
+    # field 0 = store rows 4 / 6, w 64; line 11 is field 1's row 5 -> store rows 5 / 7
+    assert vy(10, 0, True) == (4, 6, 64) and vy(11, 0, True) == (5, 7, 64), "a field's own rows"
+    # Bob keeping field 0: line 11 rebuilt from field 0 at its row 5.5 -> field chroma 2.5 -> store 4 / 6, w 128
+    assert vy(11, 0, True, 0) == (4, 6, 128), "Bob's rebuilt line from the kept field"
+    # dh 2, type 0: decimated chroma sample m centred at luma x = 4m + 1
+    f2 = dict(f, dh=2, sx=2 << 16)
+    r = chroma_line(C, C, f2, 9, np.array([2]), (0, 0), want_pos=True)[2]   # output 2: X = 4.5 + ... -> centre
+    Xq = (2 << 16) * 2 + ((2 << 16) >> 1) - (1 << 15)
+    assert Xq == (4 << 16) + (1 << 15) and (int(r[3][0]), int(r[5][0])) == (0, 224), "dh 2 (4.5 - 1) / 4 = 0.875"
+    print("disp_golden: chroma positions as docs/chroma.md §2's table")
+
+
+check_positions()
 
 
 def rgb(Y, U, V, code=1):
@@ -212,46 +323,75 @@ def write_store(name, Y, Cb, Cr):
 # L: 720x480 (seed 7: the picture the frame / field fixtures have always used)
 L = picture(7, 720, 480)
 write_store("disp_store.hex", *L)
-write_want("disp_want_frame.hex", rgb(L[0], up_ident(L[1]), up_ident(L[2])))
+# (docs/chroma.md) the identity fixtures through the general chroma model -- chroma_line on the identity fit
+F_ID = ident_fit(720, 480)
+Uf_, Vf_ = chroma_planes(L[1], L[2], F_ID)
+# the regression anchor: at the identity, type 0, the general model IS the identity step's integers
+assert (Uf_ == up_ident(L[1])).all() and (Vf_ == up_ident(L[2])).all(), "the general model is not the identity step's"
+write_want("disp_want_frame.hex", rgb(L[0], Uf_, Vf_))
 for _c in range(2, 7):                            # (0.16) the frame under every other colour code
-    write_want("disp_want_frame_c%d.hex" % _c, rgb(L[0], up_ident(L[1]), up_ident(L[2]), _c))
-write_want("disp_want_frame_il.hex", rgb(L[0], up(L[1]), up(L[2])))       # 480i: chroma nearest
-write_want("disp_want_field_il.hex", rgb(*woven444(*L, cup=up)))
-Lf = woven444(*L)
+    write_want("disp_want_frame_c%d.hex" % _c, rgb(L[0], Uf_, Vf_, _c))
+for _t in range(1, 6):                            # (chroma.md) the frame at every other siting
+    _u, _v = chroma_planes(L[1], L[2], F_ID, (_t, _t))
+    write_want("disp_want_frame_s%d.hex" % _t, rgb(L[0], _u, _v))
+# a store of fields at the identity: each field's chroma within the field (store rows 2 k + p)
+Uw_, Vw_ = chroma_planes(L[1], L[2], F_ID, field=True)
+# ... independently: ffmpeg's separatefields split, each field upsampled as its own picture, woven back
+_fl = fields(*L)
+_ou, _ov = np.zeros_like(Uw_), np.zeros_like(Vw_)
+for _p in (0, 1):
+    _ou[_p::2], _ov[_p::2] = up_ident(_fl[_p][1]), up_ident(_fl[_p][2])
+assert (_ou == Uw_).all() and (_ov == Vw_).all(), "a field store's chroma is not each field's own upsampling"
+Lf = [L[0].astype(np.int64), Uw_, Vw_]
 write_want("disp_want_field.hex", rgb(*Lf))
+# ... the two fields at different sitings (top type 0, bottom type 2: {bottom, top} = 16): each line its own field's
+_u, _v = chroma_planes(L[1], L[2], F_ID, (0, 2), field=True)
+write_want("disp_want_field_s16.hex", rgb(L[0], _u, _v))
+# 480i shows the same positions (a 1:1 picture: every pixel two dots, each frame line its own row)
+write_want("disp_want_frame_il.hex", rgb(L[0], Uf_, Vf_))
+write_want("disp_want_field_il.hex", rgb(*Lf))
 
 
 def check_chroma_oracle(c):
-    """the independent check of the identity's chroma: ffmpeg's own 4:2:0 -> 4:4:4 upsampling at
-    H.264's default siting (in_chroma_loc=left; validated on an impulse 2026-10-09: the even column
-    full, odd neighbours one half; luma rows 2m / 2m + 1 three quarters, the rows beyond one quarter)
-    against up_ident, within one code (ffmpeg rounds once, the reader twice)"""
+    """the independent check of the model at the identity: ffmpeg's own 4:2:0 -> 4:4:4 upsampling at each
+    siting (scale=in_chroma_loc), against chroma_line within one code (ffmpeg rounds once, the reader twice).
+    Validated first on an impulse per siting: the weights where the siting puts them (2026-10-09: without
+    in_chroma_loc ffmpeg assumes centre siting)"""
     if not HAVE_FFMPEG:
         print("disp_golden: identity chroma NOT checked (no ffmpeg)")
         return
-    h, w = c.shape
-    Yp = np.full((2 * h, 2 * w), 128)
-    with tempfile.TemporaryDirectory() as d:
-        src, dst = os.path.join(d, "in.yuv"), os.path.join(d, "out.yuv")
-        with open(src, "wb") as f:
-            f.write(b"".join(p.astype(np.uint8).tobytes() for p in (Yp, c, c)))
-        subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "%dx%d" % (2 * w, 2 * h),
-                        "-i", src, "-vf", "scale=in_chroma_loc=left:flags=bilinear+full_chroma_int+accurate_rnd",
-                        "-f", "rawvideo", "-pix_fmt", "yuv444p", dst], check=True)
-        raw = np.frombuffer(open(dst, "rb").read(), np.uint8).astype(np.int64)
-    n = 4 * h * w
-    assert raw.size == 3 * n, "ffmpeg's upsample: %d bytes" % raw.size
-    ref = raw[n:2 * n].reshape(2 * h, 2 * w)       # the U plane
-    ours = up_ident(c)
-    d = np.abs(ours - ref)[1:-1, 1:-2]            # (ffmpeg's own edge rule at the borders)
-    assert d.max() <= 1, "identity chroma %d codes from ffmpeg's upsampling" % d.max()
-    print("disp_golden: identity chroma within %d code of ffmpeg's upsampling (in_chroma_loc=left)" % d.max())
+    names = ["left", "center", "topleft", "top", "bottomleft", "bottom"]
+    def up_ff(cp, loc):
+        h, w = cp.shape
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = os.path.join(d, "in.yuv"), os.path.join(d, "out.yuv")
+            with open(src, "wb") as fh:
+                fh.write(b"".join(q.astype(np.uint8).tobytes() for q in (np.full((2 * h, 2 * w), 128), cp, cp)))
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "%dx%d" % (2 * w, 2 * h),
+                            "-i", src, "-vf", "scale=in_chroma_loc=%s:flags=bilinear+full_chroma_int+accurate_rnd" % loc,
+                            "-f", "rawvideo", "-pix_fmt", "yuv444p", dst], check=True)
+            raw = np.frombuffer(open(dst, "rb").read(), np.uint8).astype(np.int64)
+        n = 4 * h * w
+        return raw[n:2 * n].reshape(2 * h, 2 * w)
+    imp = np.full((8, 16), 128); imp[4, 8] = 228
+    fi = dict(lx=0, ty=0, wc=32, hc=16, ox0=0, oy0=0, sx=1 << 16, sy=1 << 16, dh=1, dv=1)   # 1:1 (no raster)
+    for t, loc in enumerate(names):
+        ref = up_ff(imp, loc) - 128
+        ours = chroma_planes(imp, imp, fi, (t, t))[0] - 128
+        assert np.abs(ref - ours).max() <= 1, "the %s impulse: ffmpeg and the model disagree" % loc
+        u, _ = chroma_planes(c, c, F_ID, (t, t))
+        d = np.abs(u - up_ff(c, loc))[2:-2, 2:-2]     # (the borders: ffmpeg's own edge rule)
+        assert d.max() <= 1, "siting %d (%s): %d codes from ffmpeg's upsampling" % (t, loc, d.max())
+    print("disp_golden: identity chroma within one code of ffmpeg's upsampling at all six sitings")
 
 
 check_chroma_oracle(L[1])
-write_want("disp_want_blend.hex", rgb(*blend(Lf)))
-write_want("disp_want_bob0.hex", rgb(*bob(Lf, 0)))
-write_want("disp_want_bob1.hex", rgb(*bob(Lf, 1)))
+# Blend and Bob keep their LUMA kernels (ffmpeg's interlace lowpass for Blend); chroma is the field model's
+# -- Blend the line's own field (docs/chroma.md §2, decided), Bob's rebuilt line the kept field's
+write_want("disp_want_blend.hex", rgb(blend(Lf)[0], Uw_, Vw_))
+for _k in (0, 1):
+    _u, _v = chroma_planes(L[1], L[2], F_ID, field=True, bobkeep=_k)
+    write_want("disp_want_bob%d.hex" % _k, rgb(bob(Lf, _k)[0], _u, _v))
 # (P6: the 480x272 and 720x576 kernel fixtures retired -- the kernels apply at the identity
 # fit only, where L's first and last lines are the mirrors; those pictures are FIT's s / t)
 
@@ -312,12 +452,11 @@ def lerp(a, b, w):
     return (a * (256 - w) + b * w + 128) >> 8
 
 
-def render(Y, Cb, Cr, f, luma=None):
+def render(Y, Cb, Cr, f, luma=None, sit=(0, 0)):
     """the raster (RH x RW x 3) and its de mask for a picture fitted by f (luma: a dict that
-    receives each shown line's luma, for the ffmpeg check below).
-    The pre-filters (§11b; anti-twitter's sliding rows among them): luma only; chroma is
-    unfiltered and read at the tap NEAREST the unshifted position -- (w + 32 (S mod 8) >= 128 ?
-    k1 : k0) + S // 8 -- so colour stays registered with luma"""
+    receives each shown line's luma -- and 'U' / 'V', the chroma -- for the independent checks below).
+    The pre-filters (§11b; anti-twitter's sliding rows among them): luma only. Chroma (docs/chroma.md):
+    bilinear at the picture's siting, at the UNSHIFTED position (chroma_line), the frame's decimated rows"""
     Yd = prefiltered(Y, f['dh'], f['dv'], f['hpf'], f['vpf'])
     Ud, Vd = box(Cb, f['dh'], f['dv']), box(Cr, f['dh'], f['dv'])
     rh, rw = f['rh'], f['rw']                     # the raster (576 lines at 50 Hz; stage 2: a native raster)
@@ -328,30 +467,16 @@ def render(Y, Cb, Cr, f, luma=None):
         return img, de
     xs = np.arange(x0, x1)
     kx0, kx1, wx = taps(f, xs - f['ox0'], 'x')
-    sh, sv = _fr.pf_shift(f['hpf']), _fr.pf_shift(f['vpf'])
-    cx = (np.where(wx + 32 * (sh % 8) >= 128, kx1, kx0) + sh // 8) >> 1
-    # (docs/display.md "Chroma at the identity") the identity fit on a progressive raster: chroma
-    # interpolated at H.264's default siting -- hup over the crop's columns, then vrow -- instead of
-    # nearest; every other fit keeps chroma nearest
-    ident = (not f.get('il', False)) and f['sx'] == (1 << _fr.Q) and f['sy'] == (1 << _fr.Q) and \
-        f['dh'] == 1 and f['dv'] == 1
-    if ident:
-        lastc = (f['lx'] + f['wc'] - 1) >> 1
-        kmin_y, kmax_y = f['ty'], f['ty'] + f['hc'] - 1
-        hU, hV = hup(Ud, kx0, lastc), hup(Vd, kx0, lastc)
     for L in range(max(0, f['oy0']), min(rh, f['oy0'] + f['oh'])):
         ky0, ky1, wy = taps(f, np.array([L - f['oy0']]), 'y')
         ky0, ky1, wy = int(ky0[0]), int(ky1[0]), int(wy[0])
         y = lerp(lerp(Yd[ky0, kx0], Yd[ky0, kx1], wx), lerp(Yd[ky1, kx0], Yd[ky1, kx1], wx), wy)
-        cy = ((ky1 if wy + 32 * (sv % 8) >= 128 else ky0) + sv // 8) >> 1
-        if ident:
-            img[L, x0:x1] = rgb(y, vrow(hU, ky0, kmin_y, kmax_y), vrow(hV, ky0, kmin_y, kmax_y))
-        else:
-            img[L, x0:x1] = rgb(y, Ud[cy, cx], Vd[cy, cx])
+        u, v = chroma_line(Ud, Vd, f, L, xs, sit)[:2]
+        img[L, x0:x1] = rgb(y, u, v)
         if luma is not None:
             luma[L] = y
-            luma.setdefault('cx', cx)                 # the chroma taps chosen (check_filter scores them)
-            luma.setdefault('cy', {})[L] = cy
+            luma.setdefault('U', {})[L] = u
+            luma.setdefault('V', {})[L] = v
         de[L, x0:x1] = True
     return img, de
 
@@ -361,8 +486,7 @@ def check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt):
     - a RAMP: every filter here sums to 1 and is symmetric about the centre it claims, so on a
       linear ramp the output equals the ramp at the output pixel's own source position (within
       the quantisation): a centre offset wrong by any fraction of a sample shows
-    - chroma: the tap chosen is the decimated sample NEAREST the unshifted position, computed
-      in floating point from the source position (ties excepted): colour registered with luma
+    - (chroma: check_chroma_ramp, every fitted case, docs/chroma.md)
     - an upscale (r <= 1 both ways) renders exactly Sharp's raster"""
     f = _fr.fit(wm, hm, cr, sar[0], sar[1], mode, il, at, pal, flt=flt)
     if f['hpf'] == 0 and f['vpf'] == 0:
@@ -378,7 +502,7 @@ def check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt):
         Y = np.round(ramp).astype(np.int64)
         lum = {}
         render(Y, np.full((H // 2, W // 2), 128), np.full((H // 2, W // 2), 128), f, lum)
-        taken = (lum.pop('cx'), lum.pop('cy'))
+        lum.pop('U'); lum.pop('V')
         step, org, size, o0, n = (f['sx'], f['lx'], f['wc'], f['ox0'], f['ow']) if axis == 'x' else \
                                  (f['sy'], f['ty'], f['hc'], f['oy0'], f['oh'])
         span = W if axis == 'x' else H
@@ -394,7 +518,6 @@ def check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt):
                 worst = max(worst, float(np.abs(y[inner] - (src[inner] * 180.0 / span + 30)).max()))
         assert worst <= 1.5, "%s: the %s ramp off by %.2f codes (a centre offset)" % (name, axis, worst)
         print("disp_golden: %s: the %s ramp within %.2f codes" % (name, axis, worst))
-    cxs, cys = taken
     # IMPULSES: isolated one-sample lines at spread output phases; each one's centroid on the output, mapped back
     # through the fit, against where it is -- the mean signed error is the centre offset (rounding
     # noise averages out; a 3/8-sample offset at r 1.8 is 0.2 output pixels)
@@ -414,7 +537,7 @@ def check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt):
             Y[lines, :] = 235
         lum = {}
         render(Y, np.full((H // 2, W // 2), 128), np.full((H // 2, W // 2), 128), f, lum)
-        lum.pop('cx'); lum.pop('cy')
+        lum.pop('U'); lum.pop('V')
         step, org, size, o0 = (f['sx'], f['lx'], f['wc'], f['ox0']) if axis == 'x' else \
                               (f['sy'], f['ty'], f['hc'], f['oy0'])
         if axis == 'x':
@@ -440,24 +563,48 @@ def check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt):
             me = float(np.mean(errs))
             assert abs(me) <= 0.08, "%s: the %s impulses' centroids off by %.3f output pixels (a centre offset)" % (name, axis, me)
             print("disp_golden: %s: %d %s impulses centred within %.3f" % (name, len(errs), axis, me))
+
+
+def check_chroma_ramp(name, W, H, f, sit):
+    """(docs/chroma.md §5) the chroma positions, independent of chroma_line's integers: a triangle wave in
+    chroma (period 48 chroma samples, 30..222: exactly 8 codes a sample, so every sample, every box
+    average of 2, 4 or 8, and every quarter / half position is an integer -- no rounding in the source) is linear between its peaks, and box
+    decimation and bilinear reproduce a linear piece exactly -- so each output pixel's Cb must be the wave
+    AT ITS OWN CHROMA POSITION, (source position - siting offset) / 2 in floating point. A siting or
+    centre error of a quarter chroma sample biases the mean by 2 codes; the blends' rounding stays near 0."""
+    def tri(u):
+        ph = np.mod(u, 48.0)
+        return 30 + 8 * np.minimum(ph, 48 - ph), np.minimum(np.abs(ph - 24), np.minimum(ph, 48 - ph))
+    # E.2.1 / Figure E-1, written out here -- NOT the model's HOFF / VOFF tables (a wrong entry there must show)
+    hoff = 0.5 if sit[0] in (1, 3, 5) else 0.0
+    voff = {0: 0.5, 1: 0.5, 2: 0.0, 3: 0.0, 4: 1.0, 5: 1.0}[sit[0]]
     for axis in ('x', 'y'):
-        step, d, org, size, n = (f['sx'], f['dh'], f['lx'], f['wc'], f['ow']) if axis == 'x' else \
-                                (f['sy'], f['dv'], f['ty'], f['hc'], f['oh'])
-        if axis == 'x':
-            j = np.arange(max(0, f['ox0']), max(0, f['ox0']) + len(cxs)) - f['ox0']
-            chosen = np.asarray(cxs)              # render's chroma column (decimated chroma units)
-        else:
-            Ls = sorted(cys)
-            j = np.array(Ls) - f['oy0']
-            chosen = np.array([cys[L] for L in Ls])
-        # the decimated luma sample nearest the UNSHIFTED position, then its chroma sample (>> 1);
-        # positions within 0.1 of a tie between chroma samples are excepted
-        u = ((org + (j + 0.5) * step / 65536.0 - 0.5) - (d - 1) / 2.0) / d
-        near = np.floor(u + 0.5).astype(np.int64) >> 1
-        inner = (u > org // d + 3) & (u < (org + size - 1) // d - 3) & (np.abs(u - np.round(u)) < 0.4)
-        bad = int((chosen[inner] != near[inner]).sum())
-        assert bad == 0, "%s: chroma's %s tap off the unshifted position on %d of %d" % (name, axis, bad, int(inner.sum()))
-    print("disp_golden: %s: chroma's taps nearest the unshifted position" % name)
+        cc = np.arange(W // 2) if axis == 'x' else np.arange(H // 2)
+        wave = np.round(tri(cc.astype(float))[0]).astype(np.int64)
+        Cb = np.tile(wave, (H // 2, 1)) if axis == 'x' else np.tile(wave[:, None], (1, W // 2))
+        lum = {}
+        render(np.full((H, W), 128), Cb, np.full((H // 2, W // 2), 128), f, lum, sit)
+        Us = lum['U']
+        d = f['dh'] if axis == 'x' else f['dv']
+        errs = []
+        for L, u in Us.items():
+            if axis == 'x':
+                j = np.arange(max(0, f['ox0']), max(0, f['ox0']) + len(u)) - f['ox0']
+                src = f['lx'] + (j + 0.5) * f['sx'] / 65536.0 - 0.5
+                cpos, org, size = (src - hoff) / 2.0, f['lx'] / 2.0, f['wc'] / 2.0
+                got = u
+            else:
+                src = np.array([f['ty'] + (L - f['oy0'] + 0.5) * f['sy'] / 65536.0 - 0.5])
+                cpos, org, size = (src - voff) / 2.0, f['ty'] / 2.0, f['hc'] / 2.0
+                got = u[len(u) // 2:len(u) // 2 + 1]
+            want, edge = tri(cpos)
+            inner = (cpos > org + 2 * d + 1) & (cpos < org + size - 2 * d - 2) & (edge > 2 * d + 2)
+            errs.extend((got[inner] - want[inner]).tolist())
+        if not errs:
+            continue
+        me, mx = float(np.mean(errs)), float(np.max(np.abs(errs)))
+        assert abs(me) <= 0.3 and mx <= 3.0, "%s siting %d: the %s chroma ramp off by mean %.2f, max %.2f (a position error)" % (
+            name, sit[0], axis, me, mx)
 
 
 def write_want_de(name, img, de):
@@ -519,35 +666,45 @@ NAT = [("nat_scope", 79, 54, 23, (0, 0, 6, 0, 6), (640, 639), 0),   # 852x356 le
        ("nat_pal",   89, 45, 36, (0, 0, 0, 0, 0), (16, 15),   2),   # 720x576 4:3 PAL: display-shaped 960x576 (hd_raster), 50 Hz
        ("nat_hd",    91, 80, 45, (0, 0, 0, 0, 0), (1, 1),     0),   # (hd_raster stage B) 1280x720 at its own pixels
        ("nat_w2k",   93, 128, 28, (0, 0, 0, 0, 0), (1, 1),    0)]   # ... the widest legal picture, 2048x448
+# (docs/chroma.md) siting variants: the same picture and fit at another chroma_sample_loc_type
+NAT_SIT = {"nat_hd_s1": ("nat_hd", 1), "nat_scope_s4": ("nat_scope", 4), "nat_pal_s2": ("nat_pal", 2)}
+NAT += [(n,) + next(c for c in NAT if c[0] == b)[1:] for n, (b, _) in NAT_SIT.items()]
 with open(os.path.join(out, "disp_nat_cases.txt"), "w") as nf:
     for name, seed, wm, hm, cr, sar, std in NAT:
+        sit_t = NAT_SIT.get(name, (None, 0))[1]
         P = picture(seed, 16 * wm, 16 * hm)
         f0 = _fr.fit(wm, hm, cr, sar[0], sar[1], 'fit')
         g = _rg.geom(f0['wc'], f0['hc'], sar[0], sar[1], wm, 1920, 1080, std, 1)
         assert g['mode'] == _rg.MODE_NATIVE, (name, g)
         f = _fr.fit(wm, hm, cr, sar[0], sar[1], 'fit', False, False, std == 2, 0, 0, True, g['rw'], g['rh'])
-        img, de = render(*P, f)
+        img, de = render(*P, f, sit=(sit_t, sit_t))
         write_store("disp_store_nat_%s.hex" % name, *P)
         write_want_de("disp_want_nat_%s.hex" % name, img, de)
-        nf.write("%s %d %d %d %d %d %d %d %d %d %d  %d %d %d %d %d  %dx%d at (%d, %d)\n" % (
+        nf.write("%s %d %d %d %d %d %d %d %d %d %d  %d %d %d %d %d %d  %dx%d at (%d, %d)\n" % (
             name, wm, hm, cr[0], cr[1], cr[2], cr[3], cr[4], sar[0], sar[1], std,
-            g['rw'], g['rh'], g['l'], g['nt'], g['last'], f['ow'], f['oh'], f['ox0'], f['oy0']))
+            g['rw'], g['rh'], g['l'], g['nt'], g['last'], 9 * sit_t, f['ow'], f['oh'], f['ox0'], f['oy0']))
+# (docs/chroma.md) siting variants of fitted cases: an upscale, a 1280x720 downscale, 480i, the Area filter
+FIT_SIT = {"s_s1": ("s", 1), "hd_s5": ("hd", 5), "hd_il_s2": ("hd_il", 2), "w_area_s3": ("w_area", 3)}
+FIT += [(n,) + next(c for c in FIT if c[0] == b)[1:] for n, (b, _) in FIT_SIT.items()]
 with open(os.path.join(out, "disp_fit_cases.txt"), "w") as cf:
     for name, seed, wm, hm, cr, sar, mode, il, at, *rest in FIT:
         pal = bool(rest and rest[0])
         flt = rest[1] if len(rest) > 1 else 'sharp'
+        sit_t = FIT_SIT.get(name, (None, 0))[1]
         P = picture(seed, 16 * wm, 16 * hm)
         f = _fr.fit(wm, hm, cr, sar[0], sar[1], mode, il, at, pal, flt=flt)
         lum = {}
-        img, de = render(*P, f, lum)
+        img, de = render(*P, f, lum, sit=(sit_t, sit_t))
         write_store("disp_store_fit_%s.hex" % name, *P)
         write_want_de("disp_want_fit_%s.hex" % name, img, de)
-        cf.write("%s %d %d %d %d %d %d %d %d %d %d %d %d %d %d  %dx%d at (%d, %d) dh %d dv %d snap %d pf %d/%d\n" % (
+        cf.write("%s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d  %dx%d at (%d, %d) dh %d dv %d snap %d pf %d/%d\n" % (
             name, wm, hm, cr[0], cr[1], cr[2], cr[3], cr[4], sar[0], sar[1],
-            ('letterbox', 'crop', 'fit').index(mode), int(il), int(at), int(pal), _fr.FLT.index(flt),
+            ('letterbox', 'crop', 'fit').index(mode), int(il), int(at), int(pal), _fr.FLT.index(flt), 9 * sit_t,
             f['ow'], f['oh'], f['ox0'], f['oy0'], f['dh'], f['dv'], int(f['snap']), f['hpf'], f['vpf']))
         if flt != 'sharp':
             check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt)
+        for _t in (0, 5, 2):                      # hoff 0 / 1/2 / 0, voff 1/2 / 1 / 0: every offset each way
+            check_chroma_ramp(name, 16 * wm, 16 * hm, f, (_t, _t))
         if name == "at_id":
             # the independent check: at the identity the sliding boxes ARE the (1, 2, 1) --
             # ffmpeg's `interlace` lowpass ((1 + a + 2b + d) >> 2) within one code (the design

@@ -60,6 +60,7 @@ wire [63:0] ddr_readdata; int unwritten;
 reg field = 1'b0, single = 1'b0, parity = 1'b0;
 reg [1:0] mode = 2'd0;
 reg [2:0] colour = 3'd1;          // +colour=N (0.16): the picture's colour code
+reg [5:0] siting = 6'd0;          // +siting=N (docs/chroma.md): the chroma siting {bottom, top} (9 t: both type t)
 reg [2:0] colswap = 3'd0;         // +colswap=N: the code changed to N in the middle of a scored frame
 reg [7:0] w_mbs = 8'd45, hf_mbs = 8'd30;
 reg [40:0] crop = '0;
@@ -74,7 +75,7 @@ disp_fit fit (.clk(clk), .rst_n(rst_n), .w_mbs(w_mbs), .hf_mbs(hf_mbs), .crop(cr
     .dh_l2(f_dh), .dv_l2(f_dv), .wc(f_wc), .hc(f_hc), .lx(f_lx), .ty(f_ty), .crop_bad(), .snap(), .clamp(), .slide(f_slide), .lb(), .hpf(f_hpf), .vpf(f_vpf), .busy(f_busy));
 disp_reader #(.DPB_BASE(BASE)) dut ( .lines(sg_lines), .last_line(sg_last),.clk(clk), .ce(ce), .rst_n(rst_n), .h_pos(h_pos), .v_pos(v_pos), .de_in(pixel_en), .il(il), .pal(pal),
     .pic_valid(1'b1), .pic_store(5'd17), .pic_field(field), .pic_w_mbs(w_mbs), .pic_hf_mbs(hf_mbs),
-    .pic_parity(parity), .pic_single(single), .deint_mode(mode), .pic_colour(colour),
+    .pic_parity(parity), .pic_single(single), .deint_mode(mode), .pic_colour(colour), .pic_siting(siting),
     .fit_ow(f_ow), .fit_oh(f_oh), .fit_ox0(f_ox0), .fit_oy0(f_oy0), .fit_sx(f_sx), .fit_sy(f_sy),
     .fit_dh_l2(f_dh), .fit_dv_l2(f_dv), .fit_lx(f_lx), .fit_ty(f_ty), .fit_wc(f_wc), .fit_hc(f_hc),
     .fit_hpf(f_hpf), .fit_vpf(f_vpf), .fetch_late(fetch_late), .fetch_changes(), .r(r), .g(g), .b(b), .de_out(de_out),
@@ -101,6 +102,7 @@ initial begin
     if ($value$plusargs("mode=%d", iv)) mode = iv[1:0];
     if ($value$plusargs("parity=%d", iv)) parity = iv[0];
     if ($value$plusargs("colour=%d", iv)) colour = iv[2:0];
+    if ($value$plusargs("siting=%d", iv)) siting = iv[5:0];   // (docs/chroma.md) {bottom, top} as 9 t for both
     if ($value$plusargs("colswap=%d", iv)) colswap = iv[2:0];
     if (!$value$plusargs("store=%s", sfile)) sfile = "bench/h264/fixtures/gen/disp_store.hex";
     if ($value$plusargs("w=%d", iv)) w_mbs = iv[7:0];

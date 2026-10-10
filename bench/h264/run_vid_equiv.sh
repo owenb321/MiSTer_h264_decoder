@@ -51,13 +51,29 @@ SCEN=(
   "e480i60|hd_il|i4444odd|1"
 )
 for s in "${SCEN[@]}"; do IFS='|' read -r _ _ o _ <<< "$s"; python3 tools/ovl_ref.py "$o" > /dev/null || { echo "FAIL: the overlay model ($o)"; exit 1; }; done
+# (docs/chroma.md §5) NEUTRAL chroma (Cb = Cr = 128): the branch reconstructs chroma bilinearly where main took
+# the nearest sample -- by design, and run_disp_reader.sh's to prove -- but both reconstruct 128 as 128, so the
+# pins stay bit-exact and this gate keeps proving what it is for: the clock-domain move (luma, sync, the overlay)
+mkdir -p .sim
+for s in "${SCEN[@]}"; do
+  IFS='|' read -r _ c _ _ <<< "$s"
+  python3 - "$G/disp_store_fit_$c.hex" ".sim/veq_store_$c.hex" "$(grep "^$c " $G/disp_fit_cases.txt | cut -d' ' -f2,3)" <<'PYEOF' || { echo "FAIL: the neutral store ($c)"; exit 1; }
+import sys
+src, dst, wh = sys.argv[1], sys.argv[2], sys.argv[3].split()
+w, hf = int(wh[0]), int(wh[1])
+words = open(src).read().split()
+assert len(words) >= w * hf * 48, "the store is short"
+ny = w * hf * 32                                   # luma's words; then Cb's and Cr's, w hf 8 each
+open(dst, "w").write("\n".join(words[:ny] + ["8080808080808080"] * (w * hf * 16) + words[w * hf * 48:]) + "\n")
+PYEOF
+done
 
 args_of() {   # scenario -> plusargs
   local name case ovl std line
   IFS='|' read -r name case ovl std <<< "$1"
   line=$(grep "^$case " $G/disp_fit_cases.txt)
   set -- $line
-  local a="+store=$G/disp_store_fit_$1.hex +w=$2 +hf=$3 +cl=$5 +cr=$6 +ct=$7 +cb=$8 +sarw=$9 +sarh=${10} +fmode=${11}"
+  local a="+store=.sim/veq_store_$1.hex +w=$2 +hf=$3 +cl=$5 +cr=$6 +ct=$7 +cb=$8 +sarw=$9 +sarh=${10} +fmode=${11}"
   [ "$4" = 1 ] && a="$a +cuy4"
   [ "${12}" = 1 ] && a="$a +il"
   [ "${13}" = 1 ] && a="$a +at"
