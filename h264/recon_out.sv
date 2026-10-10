@@ -46,6 +46,7 @@ module recon_out #(
     input  wire  [2:0]   pinfo_colour,      // (0.16, docs/colour.md) the picture's colour code, by store like the aspect
     input  wire          pinfo_col_unsup,   // (0.16) ... shown by the size rule: its matrix not supported
     input  wire  [25:0]  pinfo_col_tags,    // (0.16) its SPS's colour description (word 86)
+    input  wire  [5:0]   pinfo_siting,      // (docs/chroma.md §4) its chroma siting {bottom, top}, by store like the colour
     input  wire          pinfo_timing_v,     // the SPS's VUI timing_info_present_flag
     input  wire  [31:0]  pinfo_nuit,         //   num_units_in_tick
     input  wire  [31:0]  pinfo_ts,           //   time_scale
@@ -88,6 +89,7 @@ module recon_out #(
     output logic [2:0]   rec_colour,        // (0.16)
     output logic         rec_col_unsup,
     output logic [25:0]  rec_col_tags,
+    output logic [5:0]   rec_siting,        // (chroma.md §4)
     output logic         rec_timing_v,
     output logic [31:0]  rec_nuit,
     output logic [31:0]  rec_ts,
@@ -104,13 +106,14 @@ module recon_out #(
     input  wire  [4:0]   rel_store
 );
 
-    // ---- the store table: a (232 bits; 0.16: + the colour code, flag and tags) and b (39 bits), by store ----------------------
-    localparam int AW_A = 232, AW_B = 39;
+    // ---- the store table: a (238 bits; 0.16: + the colour code, flag and tags; chroma.md §4: + the siting) and b (39 bits), by store
+    // (no byte enables: 238 bits pack in six 40-bit M10K columns, as 232 did)
+    localparam int AW_A = 238, AW_B = 39;
     logic [AW_A-1:0] tab_a [0:31];
     logic [AW_B-1:0] tab_b [0:31];
     always_ff @(posedge clk) begin
         if (pinfo_we && !pinfo_second)
-            tab_a[pinfo_store] <= {pinfo_w_mbs, pinfo_hf_mbs, pinfo_crop, pinfo_aspect, pinfo_colour, pinfo_col_unsup, pinfo_col_tags, pinfo_timing_v, pinfo_nuit,
+            tab_a[pinfo_store] <= {pinfo_w_mbs, pinfo_hf_mbs, pinfo_crop, pinfo_aspect, pinfo_colour, pinfo_col_unsup, pinfo_col_tags, pinfo_siting, pinfo_timing_v, pinfo_nuit,
                                    pinfo_ts, pinfo_ps, pinfo_ps_v, pinfo_pts, pinfo_pts_v, pinfo_idr};
         if (pinfo_we && pinfo_second)
             tab_b[pinfo_store] <= {pinfo_ps, pinfo_ps_v, pinfo_pts, pinfo_pts_v};
@@ -204,7 +207,7 @@ module recon_out #(
     always_comb begin
         rec_end       = p_end;
         {rec_store, rec_frame, rec_unpaired, rec_first_bot, rec_dec_t, rec_dec_b} = p_word;
-        {rec_w_mbs, rec_hf_mbs, rec_crop, rec_aspect, rec_colour, rec_col_unsup, rec_col_tags, rec_timing_v, rec_nuit, rec_ts, rec_ps_a, rec_ps_a_v, rec_pts,
+        {rec_w_mbs, rec_hf_mbs, rec_crop, rec_aspect, rec_colour, rec_col_unsup, rec_col_tags, rec_siting, rec_timing_v, rec_nuit, rec_ts, rec_ps_a, rec_ps_a_v, rec_pts,
          rec_pts_v, rec_idr} = ra;
         {rec_ps_b, rec_ps_b_v, rec_pts_b, rec_pts_b_v} = rb;
     end

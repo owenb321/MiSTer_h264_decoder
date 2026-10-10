@@ -57,7 +57,7 @@ reg  [4:0]  rel_store = 0;
 recon_out #(.NST(NST)) dut (
     .clk(clk), .rst_n(rst_n),
     .pinfo_we(pinfo_we), .pinfo_store(pinfo_store), .pinfo_second(pinfo_second), .pinfo_w_mbs(pinfo_w),
-    .pinfo_hf_mbs(pinfo_hf), .pinfo_crop(pinfo_crop), .pinfo_aspect(pinfo_aspect), .pinfo_colour(3'd1), .pinfo_col_unsup(1'b0), .pinfo_col_tags(26'd0), .pinfo_timing_v(pinfo_timing_v),
+    .pinfo_hf_mbs(pinfo_hf), .pinfo_crop(pinfo_crop), .pinfo_aspect(pinfo_aspect), .pinfo_colour(3'd1), .pinfo_col_unsup(1'b0), .pinfo_col_tags(26'd0), .pinfo_siting(6'd0), .pinfo_timing_v(pinfo_timing_v),
     .pinfo_nuit(pinfo_nuit), .pinfo_ts(pinfo_ts), .pinfo_ps(pinfo_ps),
     .pinfo_ps_v(pinfo_ps_v), .pinfo_pts(pinfo_pts), .pinfo_pts_v(pinfo_pts_v), .pinfo_idr(pinfo_idr),
     .emit_valid(emit_valid), .emit_store(emit_store), .emit_unpaired(emit_unpaired), .emit_first_bot(emit_first_bot),

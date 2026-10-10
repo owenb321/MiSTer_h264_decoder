@@ -155,6 +155,9 @@
 #   CL7  recon_top: BT.2020 taken as 709                           (c2020)  CL8  recon_hdr: transfer stored as primaries (c2020's tags)
 #   CL9  recon_top: the height bound >= 576 (not >)                (c576)   CL10 recon_hdr: the absent matrix inferred 6, not 2 (cnone's tags)
 #   CL11 recon_top: matrix 3 (reserved) taken as unsupported       (cres)   CL12 recon_top: the height in half macroblocks (ctall)
+#   (docs/chroma.md §4, the chroma siting; ffprobe's chroma_location the oracle, +siting on every colour clip)
+#   CL13 recon_hdr: the top field's type not stored                (sit1)   CL14 recon_hdr: the bottom field's not stored (sit5)
+#   CL15 recon_top: the siting not carried to pinfo                (sit2)
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim/rtop_gate
@@ -266,7 +269,7 @@ xcol() {        # name size bsf-params [scol] -> .264, fixture, the expectation'
 import json, subprocess, sys
 path, scol = sys.argv[1], int(sys.argv[2])
 s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
-    "stream=width,height,color_space,color_range,nb_read_frames", "-of", "json", path],
+    "stream=width,height,color_space,color_range,chroma_location,nb_read_frames", "-of", "json", path],
     capture_output=True, text=True, check=True).stdout)["streams"][0]
 mat = {"bt709": 1, "smpte240m": 1, "fcc": 0, "bt470bg": 0, "smpte170m": 0, "bt2020nc": 2}
 cs, n = s.get("color_space", "unknown"), int(s["nb_read_frames"])
@@ -275,17 +278,22 @@ unsup = cs not in mat and cs not in ("unknown", "reserved")
 code = 1 + 2 * mat.get(cs, 1 if hd else 0) + (s.get("color_range") == "pc")
 if scol:
     code, unsup = scol, False
-print("+colour=%d +unsup=%d +scol=%d" % (code, n if unsup else 0, scol))
+# (docs/chroma.md §4) the chroma siting as ffprobe names it, E.2.1's types (absent: 0); the bsf writes
+# both fields' types alike, so the expectation is {t, t}
+loc = {"left": 0, "center": 1, "topleft": 2, "top": 3, "bottomleft": 4, "bottom": 5}.get(s.get("chroma_location", ""), 0)
+print("+colour=%d +unsup=%d +scol=%d +siting=%02x" % (code, n if unsup else 0, scol, (loc << 3) | loc))
 ORACLE
 }
-XCOL=(c709 c709f c601 c601f cfcc c240 c2020 c2020f cgbr cycgco c2020c c14 cres cnone chd ccrop ctall c576 cscol cscolf)
+XCOL=(c709 c709f c601 c601f cfcc c240 c2020 c2020f cgbr cycgco c2020c c14 cres cnone chd ccrop ctall c576 cscol cscolf
+      sit1 sit2 sit5)
 declare -A XCL=([c709]="BT.709" [c709f]="BT.709 full range" [c601]="SMPTE 170M" [c601f]="BT.470BG full range"
   [cfcc]="FCC as 601" [c240]="SMPTE 240M as 709" [c2020]="BT.2020 (+ the tags word)" [c2020f]="BT.2020 full range"
   [cgbr]="GBR: unsupported, the size rule, counted" [cycgco]="YCgCo full range: unsupported" [c2020c]="BT.2020 constant luminance: unsupported"
   [c14]="matrix 14 (ICtCp): unsupported" [cres]="matrix 3, reserved: the size rule, not counted" [cnone]="untagged SD: 601"
   [chd]="untagged 1280x16: 709 (the width bound, exactly)" [ccrop]="untagged 1280x16 cropped to 1278: 601 (the shown size)"
   [ctall]="untagged 16x592: 709 (taller than 576)" [c576]="untagged 16x576: 601 (exactly 576)"
-  [cscol]="BT.709 overridden to 601 limited (stream colour 1)" [cscolf]="untagged overridden to 2020 full (stream colour 6)")
+  [cscol]="BT.709 overridden to 601 limited (stream colour 1)" [cscolf]="untagged overridden to 2020 full (stream colour 6)"
+  [sit1]="chroma siting 1, centre (chroma.md §4)" [sit2]="chroma siting 2, top left" [sit5]="chroma siting 5, bottom")
 if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264; then
   xcol c709 64x48 "matrix_coefficients=1" & xcol c709f 64x48 "matrix_coefficients=1:video_full_range_flag=1" &
   xcol c601 64x48 "matrix_coefficients=6" & xcol c601f 64x48 "matrix_coefficients=5:video_full_range_flag=1" &
@@ -298,6 +306,8 @@ if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264; then
   xcol cres 64x48 "matrix_coefficients=3" & xcol cnone 64x48 "" &
   xcol chd 1280x16 "" & xcol ccrop 1280x16 "crop_right=2" & xcol ctall 16x592 "" & xcol c576 16x576 "" &
   xcol cscol 64x48 "matrix_coefficients=1" 1 & xcol cscolf 64x48 "" 6 &
+  xcol sit1 64x48 "chroma_sample_loc_type=1" & xcol sit2 64x48 "chroma_sample_loc_type=2" &
+  xcol sit5 64x48 "chroma_sample_loc_type=5" &
   wait
   # c2020's tags word: {present, full, primaries, transfer, matrix} as the bsf wrote them
   echo "+tags=$(printf '%07x' $(( (1 << 25) | (9 << 16) | (14 << 8) | 9 )))" >> $W/c2020.cargs
@@ -664,9 +674,14 @@ PYEOF
   mut CL7 h264/dec/recon_top.sv "8'd9:             cs_mat = 2'd2;" "8'd9:             cs_mat = 2'd1;" c2020 colour "$(cx c2020)" &
   mut CL8 h264/dec/recon_hdr.sv "F_transfer_characteristics:        c_stage[15:8] <= cv_q;" "F_transfer_characteristics:        c_stage[23:16] <= cv_q;" c2020 colour "$(cx c2020)" &
   mut CL9 h264/dec/recon_top.sv "|| (cs_h > 13'd576);" "|| (cs_h >= 13'd576);" c576 colour "$(cx c576)" &
-  mut CL10 h264/dec/recon_hdr.sv "localparam logic [25:0] C_DEFAULT = {1'b0, 1'b0, 8'd2, 8'd2, 8'd2};" "localparam logic [25:0] C_DEFAULT = {1'b0, 1'b0, 8'd2, 8'd2, 8'd6};" cnone colour "$(cx cnone)" &
+  mut CL10 h264/dec/recon_hdr.sv "localparam logic [31:0] C_DEFAULT = {3'd0, 3'd0, 1'b0, 1'b0, 8'd2, 8'd2, 8'd2};" "localparam logic [31:0] C_DEFAULT = {3'd0, 3'd0, 1'b0, 1'b0, 8'd2, 8'd2, 8'd6};" cnone colour "$(cx cnone)" &
   mut CL11 h264/dec/recon_top.sv "8'd2, 8'd3:       cs_bysize = 1'b1;" "8'd2:             cs_bysize = 1'b1;" cres colour "$(cx cres)" &
   mut CL12 h264/dec/recon_top.sv "cs_h  <= {1'b0, hf_mbs, 4'd0}" "cs_h  <= {2'b0, hf_mbs, 3'd0}" ctall colour "$(cx ctall)" &
+  wait
+  # (docs/chroma.md §4) the chroma siting, each on its own clip's [colour]
+  mut CL13 h264/dec/recon_hdr.sv "c_stage[28:26] <= cbig_q ? 3'd0 : cv_q[2:0];" "c_stage[28:26] <= 3'd0;" sit1 colour "$(cx sit1)" &
+  mut CL14 h264/dec/recon_hdr.sv "c_stage[31:29] <= cbig_q ? 3'd0 : cv_q[2:0];" "c_stage[31:29] <= 3'd0;" sit5 colour "$(cx sit5)" &
+  mut CL15 h264/dec/recon_top.sv "pinfo_siting <= sps_sit;" "pinfo_siting <= 6'd0;" sit2 colour "$(cx sit2)" &
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

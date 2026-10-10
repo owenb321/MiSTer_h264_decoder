@@ -109,6 +109,7 @@ module disp_ctl (
     input  wire  [2:0]  rec_colour,        // (0.16, docs/colour.md) the picture's colour code
     input  wire         rec_col_unsup,     // (0.16) ... shown by the size rule, its matrix not supported
     input  wire  [25:0] rec_col_tags,      // (0.16) ... its SPS's colour description
+    input  wire  [5:0]  rec_siting,        // (docs/chroma.md §4) ... its chroma siting {bottom, top}
     input  wire         rec_timing_v,
     input  wire  [31:0] rec_nuit,
     input  wire  [31:0] rec_ts,
@@ -134,6 +135,7 @@ module disp_ctl (
     output logic [39:0] sh_aspect,
     output logic [2:0]  sh_colour,         // (0.16) the shown picture's colour code (1 before any picture)
     output logic [25:0] sh_col_tags,       // (0.16) ... its colour description (word 86)
+    output logic [5:0]  sh_siting,         // (chroma.md §4) ... its chroma siting (0 before any picture)
     output logic [15:0] n_col_unsup,       // (0.16) pictures taken whose matrix is not supported (word 86; reset per stream, saturating)
     // instruments
     output logic [31:0] n_dc,
@@ -332,7 +334,7 @@ module disp_ctl (
         if (!rst_n) begin
             rec_take <= 1'b0; rel_valid <= 1'b0; rel_store <= '0;
             sh_valid <= 1'b0; sh_field <= 1'b0; sh_store <= '0; sh_w <= '0; sh_hf <= '0; sh_parity <= 1'b0; sh_single <= 1'b0;
-            sh_aspect <= '0; sh_colour <= 3'd1; sh_col_tags <= {1'b0, 1'b0, 8'd2, 8'd2, 8'd2}; n_col_unsup <= '0; sh_crop <= '0; ev_head <= 1'b0; ev_end <= 1'b0; ended <= 1'b0;
+            sh_aspect <= '0; sh_colour <= 3'd1; sh_col_tags <= {1'b0, 1'b0, 8'd2, 8'd2, 8'd2}; sh_siting <= 6'd0; n_col_unsup <= '0; sh_crop <= '0; ev_head <= 1'b0; ev_end <= 1'b0; ended <= 1'b0;
             idx <= '0; cur_pair <= 1'b0; cur_first_bot <= 1'b0; cur_single_bot <= 1'b0; c_lo <= '0; c_hi <= '0;
             cur_dur <= '0; starved <= 1'b0; have_cur <= 1'b0; held_f <= 1'b0; n_fhold <= '0;
             n_dc <= '0; n_pick <= '0; n_skip <= '0; n_reanchor <= '0; n_late <= '0; n_starve <= '0; n_cadence <= '0; n_lone <= '0;
@@ -369,7 +371,7 @@ module disp_ctl (
                     if (have_cur) begin rel_valid <= 1'b1; rel_store <= sh_store; end
                     have_cur <= 1'b1;
                     sh_valid <= 1'b1; sh_field <= !rec_frame; sh_store <= rec_store; sh_w <= rec_w_mbs;
-                    sh_hf <= rec_hf_mbs; sh_aspect <= rec_aspect; sh_colour <= rec_colour; sh_col_tags <= rec_col_tags; sh_crop <= rec_crop;
+                    sh_hf <= rec_hf_mbs; sh_aspect <= rec_aspect; sh_colour <= rec_colour; sh_col_tags <= rec_col_tags; sh_siting <= rec_siting; sh_crop <= rec_crop;
                     if (rec_col_unsup && n_col_unsup != 16'hFFFF) n_col_unsup <= n_col_unsup + 16'd1;
                     cur_pair <= !rec_frame && !rec_unpaired; cur_first_bot <= rec_first_bot;
                     cur_single_bot <= rec_dec_b && !rec_dec_t;

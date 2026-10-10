@@ -93,6 +93,7 @@ module vid_equiv_tb;
         .pic_parity(1'b0), .pic_single(1'b0), .deint_mode(2'd0),
 `ifndef MAIN_RTL
         .pic_colour(3'd1),     // (0.16) BT.601 limited: the 0.15 conversion, so the pins must match main's
+        .pic_siting(6'd0),     // (docs/chroma.md) type 0
 `endif
         .fit_ow(f_ow), .fit_oh(f_oh), .fit_ox0(f_ox0), .fit_oy0(f_oy0), .fit_sx(f_sx), .fit_sy(f_sy),
         .fit_dh_l2(f_dh), .fit_dv_l2(f_dv), .fit_lx(f_lx), .fit_ty(f_ty), .fit_wc(f_wc), .fit_hc(f_hc),

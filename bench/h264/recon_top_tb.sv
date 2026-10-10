@@ -36,7 +36,8 @@
 // [refuse].
 // +colour=N (0.16, docs/colour.md): every picture's colour code (pinfo_colour) must be N, and with
 // +unsup=N the count of pictures flagged shown by the size rule for an unsupported matrix (pinfo_col_unsup)
-// N, with +tags=HEX the SPS's colour description (pinfo_col_tags); +scol=N the stream's override.
+// N, with +tags=HEX the SPS's colour description (pinfo_col_tags); +scol=N the stream's override;
+// +siting=HEX (docs/chroma.md §4) the SPS's chroma siting {bottom, top} (pinfo_siting).
 // The runner takes N from ffprobe's reading of the clip (an oracle independent of the RTL). [colour].
 // PASS marker: "PASS: recon_top_tb". Every failure path is $fatal.
 `timescale 1ns/1ps
@@ -77,6 +78,7 @@ reg  [2:0]  scol = 3'd0;                   // +scol=N (0.16): the stream's colou
 wire [2:0]  pinfo_colour;
 wire        pinfo_col_unsup;
 wire [25:0] pinfo_col_tags;
+wire  [5:0] pinfo_siting;
 integer     col_unsup = 0;
 reg  [25:0] col_tags;
 wire [4:0]  pinfo_store, emit_store;
@@ -99,7 +101,7 @@ recon_top #(.DPB_BASE(BASE), .STALL_LIMIT(STALL)) dut (
     .ddr_readdata(ddr_readdata), .ddr_readdatavalid(ddr_readdatavalid),
     .pic_count(pic_count), .mb_count(mb_count), .err_count(err_count), .err_code(err_code), .ref_size(ref_size),
     .pinfo_we(pinfo_we), .pinfo_store(pinfo_store), .pinfo_second(pinfo_second), .pinfo_w_mbs(), .pinfo_hf_mbs(),
-    .pinfo_colour(pinfo_colour), .pinfo_col_unsup(pinfo_col_unsup), .pinfo_col_tags(pinfo_col_tags), .pinfo_crop(), .pinfo_timing_v(), .pinfo_nuit(), .pinfo_ts(), .pinfo_ps(), .pinfo_ps_v(), .pinfo_pts(),
+    .pinfo_colour(pinfo_colour), .pinfo_col_unsup(pinfo_col_unsup), .pinfo_col_tags(pinfo_col_tags), .pinfo_siting(pinfo_siting), .pinfo_crop(), .pinfo_timing_v(), .pinfo_nuit(), .pinfo_ts(), .pinfo_ps(), .pinfo_ps_v(), .pinfo_pts(),
     .pinfo_pts_v(), .pinfo_idr(),
     .emit_valid(emit_valid), .emit_store(emit_store), .emit_unpaired(emit_unpaired), .emit_first_bot(),
     .emit_frame(emit_frame), .emit_dec_t(emit_dec_t), .emit_dec_b(emit_dec_b), .emit_poc_t(), .emit_poc_b(),
@@ -205,11 +207,13 @@ endtask
 
 integer     want_colour = -1, want_unsup = -1, n_colour = 0, iv_c;
 reg  [25:0] want_tags; reg have_tags = 1'b0;
+reg   [5:0] want_siting, siting_seen; reg have_siting = 1'b0;
 always @(posedge clk) if (pinfo_we && !pinfo_second && want_colour >= 0) begin
     if (pinfo_colour !== want_colour[2:0])
         `FAIL("colour", $sformatf("picture %0d: colour code %0d, want %0d", n_colour, pinfo_colour, want_colour))
     if (pinfo_col_unsup) col_unsup = col_unsup + 1;
     col_tags = pinfo_col_tags;
+    siting_seen = pinfo_siting;
     n_colour = n_colour + 1;
 end
 reg     expect_refused = 1'b0;             // +expect_refused (0.11): every picture above the bound
@@ -330,6 +334,7 @@ initial begin
     void'($value$plusargs("colour=%d", want_colour));
     void'($value$plusargs("unsup=%d", want_unsup));
     have_tags = $value$plusargs("tags=%h", want_tags);
+    have_siting = $value$plusargs("siting=%h", want_siting);
     disp_frz     = $test$plusargs("frozen");
     trace = $test$plusargs("trace");
     $readmemh({stem, ".meta.hex"}, meta);
@@ -382,6 +387,8 @@ initial begin
             `FAIL("colour", $sformatf("col_unsup %0d, want %0d", col_unsup, want_unsup))
         if (have_tags && col_tags !== want_tags)
             `FAIL("colour", $sformatf("col_tags %h, want %h", col_tags, want_tags))
+        if (have_siting && siting_seen !== want_siting)
+            `FAIL("colour", $sformatf("siting %h, want %h", siting_seen, want_siting))
         $display("recon_top_tb: colour: %0d pictures coded %0d, col_unsup %0d, tags %h", n_colour, want_colour, col_unsup, col_tags);
     end
     $display("recon_top_tb: %0d pictures, %0d macroblocks, every pre-deblock macroblock and every picture identical; %0d stores emitted in the model's order; %0d clk_dec cycles (%0d per macroblock; %0d waiting on the display)",

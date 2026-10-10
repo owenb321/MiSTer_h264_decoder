@@ -77,6 +77,7 @@ module recon_top
                                             // the VUI's matrix and range, else the size rule
     output logic        pinfo_col_unsup,    // (0.16) ... by the size rule because its matrix is not supported
     output logic [25:0] pinfo_col_tags,     // (0.16) its SPS's colour description (recon_hdr's sps_colour; word 86)
+    output logic [5:0]  pinfo_siting,       // (docs/chroma.md §4) its SPS's chroma siting {bottom, top}, each 0..5
     output logic        pinfo_timing_v,
     output logic [31:0] pinfo_nuit,
     output logic [31:0] pinfo_ts,
@@ -143,6 +144,7 @@ module recon_top
     wire         slice_ready;
     wire [SPS_W-1:0] sps_w;
     wire [25:0] sps_col;                   // (0.16) the slice's SPS's colour description (recon_hdr)
+    wire [5:0]  sps_sit;                   // (chroma.md §4) its chroma siting
     wire [PPS_W-1:0] pps_w;
     sps_t sps;
     pps_t pps;
@@ -176,7 +178,7 @@ module recon_top
     recon_hdr u_hdr (
         .clk(clk), .rst_n(rst_n), .clear(clear),
         .se_valid(h_valid), .se_kind(w_kind), .se_aux(w_aux), .se_val(w_val), .hdr_end(hdr_end),
-        .slice_ready(slice_ready), .sps(sps_w), .sps_colour(sps_col), .pps(pps_w), .sh_first_mb(sh_first_mb), .sh_slice_type(sh_slice_type),
+        .slice_ready(slice_ready), .sps(sps_w), .sps_colour(sps_col), .sps_siting(sps_sit), .pps(pps_w), .sh_first_mb(sh_first_mb), .sh_slice_type(sh_slice_type),
         .sh_nal_ref_idc(sh_nal_ref_idc), .sh_idr(sh_idr), .sh_frame_num(sh_frame_num), .sh_field_pic(sh_field_pic),
         .sh_bottom_field(sh_bottom_field), .sh_poc_lsb(sh_poc_lsb), .sh_delta_poc_bottom(sh_delta_poc_bottom),
         .sh_delta_poc0(sh_delta_poc0), .sh_delta_poc1(sh_delta_poc1), .sh_direct_spatial(sh_direct_spatial),
@@ -447,7 +449,7 @@ module recon_top
             dpb_eos <= 1'b0; pinfo_we <= 1'b0; pinfo_store <= '0; pinfo_second <= 1'b0; pinfo_w_mbs <= '0; pinfo_hf_mbs <= '0; pinfo_aspect <= '0;
             pinfo_crop <= '0; pinfo_timing_v <= 1'b0; pinfo_nuit <= '0; pinfo_ts <= '0; pinfo_ps <= '0; pinfo_ps_v <= 1'b0;
             pinfo_pts <= '0; pinfo_pts_v <= 1'b0; pinfo_idr <= 1'b0;
-            pinfo_colour <= 3'd1; pinfo_col_unsup <= 1'b0; pinfo_col_tags <= {1'b0, 1'b0, 8'd2, 8'd2, 8'd2};
+            pinfo_colour <= 3'd1; pinfo_col_unsup <= 1'b0; pinfo_col_tags <= {1'b0, 1'b0, 8'd2, 8'd2, 8'd2}; pinfo_siting <= 6'd0;
         end else begin
             // P5d: an end-of-stream word consumed -> recon_dpb closes and flushes
             dpb_eos <= sf_rd && sf_valid && (w_kind == K_EOS_WORD);
@@ -477,7 +479,7 @@ module recon_top
                                 (d_struct != cur_struct);
                 pinfo_w_mbs <= w_mbs; pinfo_hf_mbs <= hf_mbs;
                 pinfo_aspect <= {sps.aspect_ratio_idc, sps.sar_width, sps.sar_height};
-                pinfo_colour <= cs_code; pinfo_col_unsup <= cs_unsup; pinfo_col_tags <= sps_col;
+                pinfo_colour <= cs_code; pinfo_col_unsup <= cs_unsup; pinfo_col_tags <= sps_col; pinfo_siting <= sps_sit;
                 pinfo_crop <= sps.frame_cropping ? {!sps.frame_mbs_only, sps.crop_left, sps.crop_right, sps.crop_top, sps.crop_bottom} : 41'd0;
                 pinfo_timing_v <= sps.timing_present; pinfo_nuit <= sps.num_units_in_tick; pinfo_ts <= sps.time_scale;
                 pinfo_ps <= sh_ps; pinfo_ps_v <= sh_ps_v; pinfo_pts <= sh_pts; pinfo_pts_v <= sh_pts_v;
