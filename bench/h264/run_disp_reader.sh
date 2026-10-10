@@ -130,7 +130,7 @@
 #   Z2  disp: the horizontal blend's rounding dropped (Cb of row b)  -> [rgb]
 #   Z3  disp: the vertical blend's rows swapped (2m takes d)         -> [rgb]
 #   Z4  disp: the vertical blend on a store of fields                -> [field]
-#   Z5  disp: the ahead read not clamped to the crop's last sample   -> [rgb] (the right edge)
+#   Z5  disp: chroma read at the first tap, not the second (no sample ahead) -> [rgb]
 #   Z6  disp: no interpolation at the identity (nearest)             -> [rgb]
 #   Z7  disp: interpolation off the identity                         -> [fit] p640 (a scaled progressive
 #       picture: the previous dot holds another sample. At 480i the mutant is EQUIVALENT -- a pixel is
@@ -287,7 +287,7 @@ PYEOF
   mut R5 $D "pos0_c <= \$signed({17'd0, r_lx, 16'd0})" "pos0_c <= \$signed(45'sd0)" $DT "fit" "$O" "$(fit_args w)" & throttle
   mut H1 $D "store_base = DPB_BASE + {6'd0, m_store, 18'd0};" "store_base = DPB_BASE + {7'd0, m_store, 17'd0};" $DT "fit|ddr" "$O" "$(fit_args hd)" & throttle
   mut H2 $D "store_base + {3'd0, pm_r, 5'd0} + {5'd0, pm_r, 3'd0} + lc_r;" "store_base + {12'd0, 17'({3'd0, pm_r, 5'd0} + {5'd0, pm_r, 3'd0})} + lc_r;" $DT "fit" "$O" "$(fit_args hd)" & throttle
-  mut R6 $D "wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;" "wire  [10:0] c_t  = x_k0;" $DT "fit" "$O" "$(fit_args p640)" & throttle
+  mut R6 $D "wire  [10:0] c_t  = (ident || ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128)) ? x_k1 : x_k0;" "wire  [10:0] c_t  = ident ? x_k1 : x_k0;" $DT "fit" "$O" "$(fit_args p640)" & throttle
   wait
   mut R7 $D "pos0_p <= pos0_a + (pos0_b <<< 14);" "pos0_p <= 45'sd0;" $DT "fit" "$O" "$(fit_args v)" & throttle
   mut R9 $D "wire         cmd_pending = (cmd_done_s2 != cmd_tog);" "wire         cmd_pending = 1'b1;" $DT "late" "$O" & throttle
@@ -308,7 +308,7 @@ PYEOF
   mut F1 $D "3'd3:    had[i] = {{3{hdf[i][17]}}, hdf[i]} + {{2{hdf[i][17]}}, hdf[i], 1'b0};" "3'd3:    had[i] = {{2{hdf[i][17]}}, hdf[i], 1'b0};" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F2 $D "                    hf_v <= hn_end;" "                    hf_v <= 1'b0;" $DT "fit" "$O" "$(fit_args port_area)" & throttle
   mut F3 $D "!f_box          ? 4'd8 - {1'b0, m_vpf} : {1'b0, m_vpf};" "!f_box          ? 4'd8 : {1'b0, m_vpf};" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
-  mut F4 $D "wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;" "wire  [10:0] c_t  = ({1'b0, x_w} >= 9'd128) ? x_k1 : x_k0;" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
+  mut F4 $D "wire  [10:0] c_t  = (ident || ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128)) ? x_k1 : x_k0;" "wire  [10:0] c_t  = (ident || ({1'b0, x_w} >= 9'd128)) ? x_k1 : x_k0;" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F5 $D "wire  [4:0]  rows_m1 = ((plane == 2'd0 && m_vpf != 3'd0) ? {dv_n, 1'b0} : {1'b0, dv_n}) - 5'd1;" "wire  [4:0]  rows_m1 = ((plane == 2'd0 && m_vpf == 3'd4) ? {dv_n, 1'b0} : {1'b0, dv_n}) - 5'd1;" $DT "fit" "$O" "$(fit_args port_area)" & throttle
   mut F6 $D " - 45'sd32768 - \$signed({20'd0, c_ho});" " - 45'sd32768;" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
   mut F7 $D "        hx[8] = hf_v ? hp[7] : hn[0];" "        hx[8] = hp[7];" $DT "fit" "$O" "$(fit_args hd_area)" & throttle
@@ -330,7 +330,7 @@ PYEOF
   mut Z2 $D "hx_ub = {1'b0, r4_ub} + {1'b0, s3_ub} + 9'd1" "hx_ub = {1'b0, r4_ub} + {1'b0, s3_ub} + 9'd0" $DT "rgb" "$O" & throttle
   mut Z3 $D "{2'd0, s4_rp ? s4_ud : s4_ua} + 10'd2;" "{2'd0, s4_rp ? s4_ua : s4_ud} + 10'd2;" $DT "rgb" "$O" & throttle
   mut Z4 $D "s0_vi <= ident && !pic_field;" "s0_vi <= ident;" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
-  mut Z5 $D "(c_up > c_lm) ? c_lm[10:0] : c_up[10:0];" "c_up[10:0];" $DT "rgb" "$O" & throttle
+  mut Z5 $D "wire  [10:0] c_t  = (ident || (" "wire  [10:0] c_t  = (1'b0 || (" $DT "rgb" "$O" & throttle
   mut Z6 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b0; s0_vi" $DT "rgb" "$O" & throttle
   mut Z7 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b1; s0_vi" $DT "fit" "$O" "$(fit_args p640)" & throttle
   wait

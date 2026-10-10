@@ -546,11 +546,12 @@ module disp_reader #(
     // at the identity") at the identity fit the sample AHEAD, (x + 1) >> 1 clamped to the crop's last:
     // an even column's own, an odd column's right neighbour; its left neighbour is the previous dot's
     // read (at the identity the column steps by one a dot, and a line's first shown column is even:
-    // the crop's lx is even, H.264's CropUnitX / the PICTURE record's pairs), blended in stage 4
-    wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;
-    wire  [11:0] c_up = ({1'b0, x_k0} + 12'd1) >> 1;
-    wire  [11:0] c_lm = {1'b0, kmax_x[11:1]};
-    wire  [10:0] c_n  = !ident ? (c_t >> 1) : (c_up > c_lm) ? c_lm[10:0] : c_up[10:0];
+    // the crop's lx is even, H.264's CropUnitX / the PICTURE record's pairs), blended in stage 4. That
+    // index IS the second tap's: x_k1 = min(x + 1, kmax) (the crop's first column even), so the
+    // identity only adds a term to the tap's choice -- no adder in front of the RAM's address (the
+    // first form, (x_k0 + 1) >> 1 against kmax >> 1, was clk_vid's worst path: 81.6 MHz, gate 86)
+    wire  [10:0] c_t  = (ident || ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128)) ? x_k1 : x_k0;
+    wire  [10:0] c_n  = c_t >> 1;
     // (the RAM words, on the dot like every stage: read every clock, the register would hold the
     // NEXT dot's word by the time the next stage takes it beside this dot's byte selects)
     logic [63:0] q_ya, q_ybe, q_ybo, q_yde, q_ydo, q_cba, q_cbb, q_cbd, q_cra, q_crb, q_crd;

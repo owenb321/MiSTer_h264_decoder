@@ -98,7 +98,10 @@ choice.
   picture on Progressive (720x480, the 704x480 snap).
 - **The cost: shifts and adds, no DSP, no latency, no RAM.** At 1:1 the column steps by one a dot,
   so stage 1 reads the sample AHEAD (`(x + 1) >> 1`, clamped to the crop's last) and the previous
-  dot's read is the left neighbour, still in stage 4's register (`r4_*`). The rows above and below
+  dot's read is the left neighbour, still in stage 4's register (`r4_*`). That index is the second
+  tap's own, `x_k1 >> 1` (`x_k1 = min(x + 1, kmax)`, the crop's first column even), so the identity
+  only adds a term to the chroma tap's choice. (The first form computed `(x_k0 + 1) >> 1` against
+  `kmax >> 1` in front of the RAM's address: clk_vid's worst path, 81.6 MHz against its 86 gate.) The rows above and below
   are already held at the identity (the kernel's `a` / `d`: k - 1 / k + 1, the window v - 1 .. v + 1),
   their chroma rows (k +- 1) >> 1. Stage 4 blends horizontally (all three rows), stage 5 vertically.
   LAT stays 9.
