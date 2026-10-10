@@ -66,6 +66,12 @@ trails the picture by roughly 10 to 40 ms, inside what viewers perceive as in sy
 mode is the stream's, taken from its first access unit's LOW_LATENCY flag; audio sent
 before the first access unit is paced.
 
+!!! note "Not yet implemented: a full audio queue never stops the picture"
+    A planned 1.x core changes one rule. While the audio queue is full, a late picture no longer
+    moves the clock back. The clock runs on, the queued audio plays, and the core reads on.
+    Video that came behind the audio is shown late, and counted, but the picture keeps moving.
+    Until then, keep your audio within a second of your video (above).
+
 **Everything is counted** in the status block (words 40-45, see
 [The interface](interface.md#the-control-block)): the audio's state, the queue, frames
 played, silence played for gaps, frames dropped late, underruns, the low-latency drops and

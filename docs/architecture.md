@@ -641,6 +641,86 @@ it arrives against a queue target:
   tolerance.
 Parameters in the RTL, recorded here; a program cannot set them in 0.5.
 
+### The audio queue full: the clock never runs back over it (designed 2026-10-10; NOT BUILT, awaiting the maintainer)
+
+**The defect** (`jellyfin.md` §12, .201, 2026-10-09). A transcode's TS put the audio more than 5 s ahead of
+the video. The client wrote it in that order, and the descriptor FIFO filled (256 records, 5.12 s of 20 ms
+ones). The parser then waits at the next AUDIO header and the video behind it starves (above: by design).
+That alone would only delay the video. The livelock is the display's clock:
+- the starved pictures reach `disp_sched` late by more than `LATE_MAX` (2.7 s), and its `disc` term (the
+  `d_stc_pic > LATE_MAX_TICKS` leg) anchors the STC back to them (`disp_reanchor` 1 -> 9 on the logger);
+- the queued audio, seconds ahead of the new STC, is early again, so `aud_play`'s gate closes and plays
+  silence (`aud_state` 1, `aud_gap` growing);
+- with the queue full, the only way out is the STC reaching the queue's head. But every record that does
+  play frees one slot, the parser reads a little further (more audio, a few pictures), those pictures are
+  late again, and the STC goes back again.
+Unplayed audio ended up holding the whole 8 MB ring; ~1 s of progress every ~20 s. The `far` term after an
+audio anchor (the clock started by a full queue, the first picture `LATE_MAX` behind it) is the same leg at
+a stream's start. **No interleave a program writes may stick the core.** The client now holds its audio to
+~1 s ahead, but another program, or a source whose audio leads by more than the ring holds, can still fill
+the queue.
+
+**The invariant.** While the descriptor FIFO is full, the parser reads nothing, and only the STC reaching
+the queue's head drains it. So no lateness may move the STC back while the FIFO is full: that can only
+delay the drain, and it is what feeds the next late picture.
+
+**Proposed rule (B1).** On a paced stream (not LOW_LATENCY), **while the audio queue is within 8 records of
+full** (`aud_play`'s `q_rec >= 248`), **a picture's lateness does not anchor the clock**:
+- `disp_sched` drops the `LATE_MAX` leg from `disc` and from `far`;
+- the picture is shown at once, as any late picture (lateness is not a discontinuity), and counted in
+  `disp_late`;
+- the other anchors keep their legs: a picture behind the timeline by more than a frame, a jump forward
+  past `FWD_MAX`, a picture `FWD_MAX` ahead of an audio-started clock. They follow the stream's own
+  timestamps, not its starvation.
+
+With the rule, in the freeze, the STC only runs forward. The queue drains at 48 kHz, the parser reads on,
+and the video behind the audio arrives (lead - 5.12 s) late and is shown late. The film plays with its
+picture that far behind its sound, `disp_late` counting every picture. That is wrong and visible, but not
+stuck, and a program that keeps its audio within a second never gets there.
+- *Why it ends:* while the FIFO is full, only the pictures already downstream (the DPB, the display
+  queue) can reach `disp_sched`. Under B1 none of them anchors for lateness, and a timeline anchor (a
+  timestamp jump) fires at most once each. After them the STC only counts up, the head becomes due, and
+  the queue plays out.
+- *Why "nearly full", not "any audio queued"* (the simpler rule: the audio the clock's master):
+  - a network stall drains the queue as well, and there the old recovery is the better one. The late
+    picture re-anchors, the audio waits for it, and sound and picture are in sync again at once;
+  - under "any audio queued", a stall's whole lag would stay as lip-sync error until the decoder caught up
+    (3 s at 1.13x: ~23 s);
+  - "full" is exactly the state in which the parser waits on audio. The 8-record band (160 ms) covers
+    the freeze's steady state, which swings between 255 and 256: each record played frees a slot, the
+    parser refills it.
+- *The signals:* `aq_full = !ll && (q_rec >= 9'd248)`, registered in `aud_play` (clk_sys), into
+  `disp_ctl` and `disp_sched` (clk_sys too: no crossing) as a level, used in the decide stage (ev[3]).
+  Cost: one input, a compare and two AND terms; no M10K, no DSP. `tools/disp_sched_ref.py` gains the
+  same input.
+- *The interface:* no word or field moves or changes meaning, so this is a minor's behaviour change.
+  Proposed **1.1** (word 1 `0x0101`), so a program can tell whether the core it runs on has the guarantee;
+  1.0's library attaches to it (minor >= its own). The manual's `integrating/audio.md` then says it in
+  "How the core plays it", and drops "it can stay stopped until your program flushes the stream".
+
+**Alternatives, for the maintainer.**
+- **B2, the parser skips audio at the full gate while the display starves** (the AUDIO record dropped,
+  counted): removes B1's lag, but drops sound (gaps in a film), and the parser (clk_sys) must learn the
+  display's starve state. Not recommended alone: it trades a late picture for missing sound and still
+  needs B1's guarantee for the start-of-stream `far` case.
+- **B3, a deeper descriptor FIFO** (1,024 records, ~20 s; FFmpeg's muxer interleaves at most 10 s by
+  default): no lag for any lead under 20 s. A descriptor is 89 bits ({index, length, PTS, valid}), so 3
+  M10K become ~9 (1K x 10 each); the device has ~140 left. The ring then
+  holds up to ~3.8 MB of unplayed PCM (of 8 MB), and the manual's 256 becomes 1,024 (more room only:
+  additive). It complements B1 and does not replace it: a lead past the FIFO must still not stick.
+- **No backward re-anchor while any audio is queued:** rejected above (the stall's recovery).
+
+**Gates, when built.**
+- A `run_disp_sched.sh` scenario (and its model, `disp_sched_ref.py`): `q_rec` held at 256 while
+  pictures arrive 3 s late, the STC monotonic, `disp_reanchor` unchanged, every picture shown. Under
+  `--red`, the suppression removed must go RED in that scenario.
+- `run_ring_rd.sh` / `run_cosim.sh` (the ring mode, a 6 s audio lead through the real parser and
+  `aud_play`): the stream plays to its END.
+- The fit (an RTL change).
+- The rig, control arm first: `h264play --pcm FILE --pcm-lead 6000` writes the audio 6 s ahead, as the
+  server did. It should reproduce the freeze on main's build and play (late) on this one; the logger's
+  `disp_reanchor` / `aud_state` / `aud_q_rec` / `disp_late` are the readings.
+
 ### The pause and volume word (program word 34, a u32)
 
 | bits | field |
