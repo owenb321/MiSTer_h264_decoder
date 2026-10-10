@@ -67,8 +67,9 @@ mode is the stream's, taken from its first access unit's LOW_LATENCY flag; audio
 before the first access unit is paced.
 
 !!! note "Not yet implemented: a full audio queue never stops the picture"
-    A planned 1.x core changes one rule. While the audio queue is full, a late picture no longer
-    moves the clock back. The clock runs on, the queued audio plays, and the core reads on.
+    A planned 1.x core changes one rule. While the queued audio is on time -- playing, or waiting
+    for its time -- a late picture no longer moves the clock back. The clock runs on, the queued
+    audio plays, and the core reads on.
     Video that came behind the audio is shown late, and counted, but the picture keeps moving.
     Until then, keep your audio within a second of your video (above).
 

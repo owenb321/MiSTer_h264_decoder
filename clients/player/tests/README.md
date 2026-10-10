@@ -135,7 +135,7 @@ the fitted 720 x 576 at 50 Hz, so the canvas is drawn for two widths.
 | M26 the last picture without END_OF_STREAM | (p1) |
 | M27 stores taken in turn without the store rule | T10 |
 | M28 every picture's PTS dropped | (p1) |
-| M29 swr built once, from the decoder's layout at open (dca: stereo under `downmix`, its frames 5.1) | (p4) |
+| M29 swr built once at the open, from the decoder's layout then (dca: stereo under `downmix`, its frames 5.1) | (p4) |
 | M30 (§12) the audio written in the demuxer's order again | (x) |
 | M31 (§12) an audio stream the probe missed passed over | (y) |
 | M32 (§12) swr built at the open from the probe's parameters | (y) |

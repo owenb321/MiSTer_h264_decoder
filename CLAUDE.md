@@ -328,10 +328,12 @@ chroma at the siting on every output (fields within their field); benches GREEN 
 (`H264_chromafull_20261010_1752.rbf`, 93 % ALM, 3 DSP left); on .201 every output matches the golden 99.99-100 %
 (`docs/history.md` §44); ✅ HW-CONFIRMED 2026-10-10 (the maintainer on .201: "this looks better"). **The Jellyfin transcode's no-audio and freeze (found 2026-10-09; `fix/jellyfin-transcode`, `docs/jellyfin.md` §12):**
 the client's half built (`clients/common/player.c`: the audio held to ~1 s ahead of the video in two reader queues, an
-audio stream the probe missed played, every record timed, a 4 MB / 2 s probe for network inputs), both host tests GREEN and
+audio stream the probe missed played, every record timed; a larger probe measured and not kept), both host tests GREEN and
 `--red` (Jellyfin (v) / (w), the player (x) / (y), fixtures by `tools/ts_skew.py`), the manual's `integrating/audio.md` "keep
-the audio within about a second"; no RTL beyond `dev-jftranscode` (no fit). ⏳ the rig with the maintainer's film; then the
-core's livelock (Part B: design only, in `architecture.md`, built only at the maintainer's word). 91 % ALM, 9 DSP left.
+the audio within about a second"; no RTL beyond `dev-jftranscode` (no fit); **on .201 with the maintainer's film, control
+arm first** (`history.md` §45: 1.0.0's client froze and played two opens silent; this one clean on every open). The core's
+livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): designed only, built
+only at the maintainer's word. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

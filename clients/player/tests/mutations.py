@@ -59,7 +59,7 @@ MUTATIONS = {
     "M10_no_enter": ("src/main.c", [
         ("            open_folder(a, next, NULL);\n            state_save(a);\n            return;",
          "            (void)next;\n            return;"),
-    ], "(f) a folder entered: the seventh file played is a_dir/inner.mkv"),
+    ], "(f) a folder entered: the ninth file played is a_dir/inner.mkv"),
     # the screensaver's first stage never comes (straight to black, or nothing)
     "M11_saver_no_dim": ("common/ui.c", [
         ("    if (u->dim_ms && idle >= u->dim_ms) return 1;\n", ""),
@@ -147,8 +147,10 @@ MUTATIONS = {
     # 5.1): the center and the surrounds dropped (2026-10-06, a Blu-ray rip's DTS without dialogue)
     "M29_swr_at_open": ("common/player.c", [
         ("        if (swr_for(p, &fr->ch_layout, fr->format, fr->sample_rate) < 0) { av_frame_unref(fr); continue; }\n",
-         "        if (!p->swr && swr_for(p, &p->adec->ch_layout, p->adec->sample_fmt, p->adec->sample_rate) < 0)\n"
-         "            { av_frame_unref(fr); continue; }\n"),
+         ""),
+        ("    return avcodec_open2(p->adec, dec, NULL);\n",
+         "    if ((rc = avcodec_open2(p->adec, dec, NULL)) < 0) return rc;\n"
+         "    return swr_for(p, &p->adec->ch_layout, p->adec->sample_fmt, p->adec->sample_rate);\n"),
     ], "(p4) f_mpeg4's DTS 5.1 downmixed with its center (a center-only tone in both sides, at ffmpeg's level)"),
     # (docs/jellyfin.md S12) the audio written in the demuxer's order again: never held for the video
     "M30_interleave": ("common/player.c", [

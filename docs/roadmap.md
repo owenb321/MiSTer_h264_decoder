@@ -962,6 +962,21 @@ the identity").
 - Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
   chroma under the Area pre-filter.
 
+## A transcode with no audio, and a freeze (found 2026-10-09, the maintainer testing 1.0.0) -- 🔧 `fix/jellyfin-transcode`
+
+`docs/jellyfin.md` §12, `history.md` §45.
+- [x] The client (`clients/common/player.c`, both FFmpeg clients): the audio held to ~1 s ahead of the
+      video (two reader queues), an audio stream the probe missed played, every record timed. A larger
+      probe was measured on the rig and not kept.
+- [x] Host tests GREEN and `--red`: Jellyfin (v) / (w), M22-M25; the player (x) / (y), M30-M33. The
+      fixtures come from `tools/ts_skew.py`.
+- [x] On .201, control arm first: 1.0.0's client froze and played two opens silent; this branch played
+      all four opens with audio and no re-anchor.
+- [ ] The maintainer's round; merge.
+- [ ] **The core's livelock (Part B), designed only** (`architecture.md` "Queued audio: a late picture
+      never runs the clock back over it"): no lateness anchor while queued audio is on time; proposed as
+      interface 1.1. Built only at the maintainer's word; alternatives B2 / B3 there.
+
 ## Phase 7 — For integrators
 
 - [x] ✅ **The interface frozen at 1.0 -- MERGED (PR fj#43)** (2026-10-07; `architecture.md` "Version 1.0",

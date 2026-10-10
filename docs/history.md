@@ -1489,3 +1489,43 @@ nearest rule:
 `_Other/H264_20261010.rbf` (beside 1.0.0's `H264_20261009.rbf`; the programs load the newest) for the
 maintainer's own round on real content: **"this looks better"** (2026-10-10).
 
+
+## 45. The Jellyfin transcode's no audio and freeze (fix/jellyfin-transcode, 2026-10-10)
+
+`docs/jellyfin.md` §12: the client's half (audio held to ~1 s ahead of the video, an audio stream the probe
+missed played, every record timed); the core's livelock designed only (`architecture.md` "Queued audio: a
+late picture never runs the clock back over it"). No RTL (`dev-jftranscode` only: no fit).
+
+**On .201**, with the maintainer's word, control arm first. The setup:
+- the core is the chroma build (`_Other/H264_20261010.rbf`), Native (HDMI);
+- the film is the maintainer's 1080p HEVC 10-bit one of 2026-10-09, transcoded by the server to H.264
+  1280x720 at 9.6 Mbit/s with AAC stereo;
+- it was cast through the server's API with the client's own token: Play at 5046.4 s, then seeks to
+  5060.9, 6090.5 and 3946.6 s (2026-10-09's opens), 35-70 s each;
+- the 1 s status logger (`h264stat --json`) ran beside the client's log (`CLIENT_TIMING`). Logs on the
+  rig: `/media/fat/h264tel/{control,fixed,fixed2}.{stat,jf}.log`.
+
+The clock is measured within each session; the probe is the stream-info stage, from `CLIENT_TIMING`:
+
+| open | 1.0.0's client (control) | this branch |
+|---|---|---|
+| Play 5046.4 | **froze**: the clock 21.1 s in 60.5 s, 6 re-anchors, `aud_q_rec` 256, 1,075 records | clock 70.1 s in 70.1 s, no re-anchor, `aud_q_rec` <= 86, 3,368 records |
+| seek 5060.9 | **no audio** (0 records; "unspecified sample rate") | 1,389 records ("decoding them from the stream") |
+| seek 6090.5 | **no audio** (0 records; the same) | 820 records (the same) |
+| seek 3946.6 | 1,620 records | 1,671 records |
+| first IDR / probe | 13.65 (the server's first start), 2.15, 4.20, 4.02 s / 53-127 ms | 3.33, 2.47, 4.45, 3.78 s / 179-286 ms |
+
+- *The hold:* the client logged the stream's audio up to 1.0 s, 2.4 s and 2.5 s ahead of its video on
+  ordinary opens, and held it back. Nothing was let through early.
+- *Every control re-anchor* came with the audio armed and waiting early (`aud_state` 1, `aud_gap` growing)
+  and the ring full (8.0 MB): first with `aud_q_rec` at 255-256, then with it falling to 45 / 38. The
+  2026-10-09 trace shows the same thing over 16 re-anchors, `aud_q_rec` down to 3. That data set Part B's
+  rule (the audio's state, not the FIFO's fill level).
+- *The probe:* that arm ran a 4 MB / 2 s probe for network inputs. It missed the same audio on both opens
+  and its stage took ~0.15-0.2 s longer, so it was reverted to 1 MB / 0.5 s.
+- *The rebuilt client* (`fixed2`), Play 5060.9 and seek 6090.5: 880 / 803 records, no re-anchor, probe
+  100 / 120 ms, first IDR 3.55 / 4.25 s.
+
+Restored: the menu core, 1.0.0's client back in `/media/fat/jellyfin/jellyfin`, this branch's beside it as
+`jellyfin.jftranscode` (0ef771f4...). The file player's ARM build was not run on the rig (the same
+`player.c`; host-tested: (x) / (y)).

@@ -24,10 +24,6 @@
                                              core keeps 256 records (5.12 s) it has not played and stops
                                              reading the ring past them, the video behind them too
                                              (docs/jellyfin.md S12) */
-#define PROBE_NET     (4u << 20)          /* the probe of a network input (an HLS transcode): bytes ... */
-#define PROBE_NET_US  2000000             /* ... and stream time */
-#define PROBE_FILE    (1u << 20)          /* a file's */
-#define PROBE_FILE_US 500000
 #define AUD_RECORD    960                 /* audio frames gathered into one record: 20 ms (>= the library's 5 ms) */
 #define STEP_PACKETS  64                  /* packets one step moves at most (the loop stays responsive) */
 #define STEP_BUDGET_MS 10                 /* ... and the time it may spend: a write can take long (the
@@ -419,12 +415,11 @@ static void *reader(void *arg)
     av_dict_set(&opts, "rw_timeout", "15000000", 0);          /* 15 s without a byte: fail */
     av_dict_set(&opts, "reconnect", "1", 0);
     /* the probe: the server said what is coming; a short look is enough (the default reads up to
-     * 5 MB / 5 s -- about a second of a transcode's start on the rig). A network input's is longer:
-     * at 9.6 Mbit/s 1 MB is under a second, and a transcode's audio can start later than that (an
-     * audio stream the probe missed is still played: open_audio). docs/jellyfin.md S12 */
-    int net = strstr(p->url, "://") != NULL;
-    p->fmt->probesize = net ? PROBE_NET : PROBE_FILE;
-    p->fmt->max_analyze_duration = net ? PROBE_NET_US : PROBE_FILE_US;
+     * 5 MB / 5 s -- about a second of a transcode's start on the rig). An audio stream it misses (a
+     * 9.6 Mbit/s transcode's can start past it) is still played: open_audio. 4 MB / 2 s was measured
+     * on the rig (docs/jellyfin.md S12): it missed the same audio and cost ~0.2 s an open */
+    p->fmt->probesize = 1 << 20;
+    p->fmt->max_analyze_duration = 500000;
     const char *open_url = p->url;
     const AVInputFormat *ifmt = NULL;
     if (p->cfg.hls_trim) {

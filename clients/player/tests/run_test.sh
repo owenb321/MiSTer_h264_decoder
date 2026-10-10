@@ -265,6 +265,8 @@ done
 red_fail=0
 summary=()
 for name in $(python3 "$here/mutations.py" list); do
+  # PL_RED_ONLY="NAME ..." : those mutations alone
+  [ -n "${PL_RED_ONLY:-}" ] && [[ " $PL_RED_ONLY " != *" $name "* ]] && continue
   label=$(python3 "$here/mutations.py" label "$name")
   m=$work/red_$name
   rm -rf "$m"; mkdir -p "$m"; cp -r "$src" "$m/src"; cp -r "$common" "$m/common"
