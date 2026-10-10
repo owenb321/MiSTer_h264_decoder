@@ -705,7 +705,7 @@ stuck, and a program that keeps its audio within a second never gets there.
   needs B1's guarantee for the start-of-stream `far` case.
 - **B3, a deeper descriptor FIFO** (1,024 records, ~20 s; FFmpeg's muxer interleaves at most 10 s by
   default): no lag for any lead under 20 s. A descriptor is 89 bits ({index, length, PTS, valid}), so 3
-  M10K become ~9 (1K x 10 each); the device has ~140 left. The ring then
+  M10K become ~9 (1K x 10 each); the last fit used 421 of 553. The ring then
   holds up to ~3.8 MB of unplayed PCM (of 8 MB), and the manual's 256 becomes 1,024 (more room only:
   additive). It complements B1 and does not replace it: a lead past the FIFO must still not stick.
 - **No backward re-anchor while any audio is queued:** rejected above (the stall's recovery).
