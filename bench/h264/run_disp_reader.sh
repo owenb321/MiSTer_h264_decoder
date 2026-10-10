@@ -12,12 +12,14 @@
 # busy, both aborts clean; disp_reader_tb (the reader fed by h264/disp_fit.sv) on every
 # deinterlace variant at the identity fit (P5f) and every fitted case (P6 step 3), each dot
 # {de, R, G, B} against tools/disp_golden.py, LAT 5: [rgb] a frame (the BT.601 conversion
-# of the store's samples: the identity fit is the old golden bit for bit); [field] the same
+# of the store's samples, chroma interpolated at the identity -- docs/display.md "Chroma at the
+# identity"); [field] the same
 # store as a field pair, woven (ffmpeg separatefields); [pass] the frame in Bob and in Blend
 # (untouched); [blend] the pair in Blend (ffmpeg's interlace lowpass; both edges' mirrors
 # are its first and last lines); [bob] the pair in Bob keeping either field; [single] one
 # field in Weave and in Blend (bobbed on its own field); [il] (P6) the 480i raster -- a
-# frame, and a field pair with the menu on Blend -- shown as woven fields, every pixel two
+# frame, and a field pair with the menu on Blend -- shown as woven fields, chroma nearest (not the
+# identity: disp_want_frame_il / field_il), every pixel two
 # dots; [fit] the nine fitted pictures of bench/h264/fixtures/gen/disp_fit_cases.txt
 # (480x272 up, 720x576 pillarboxed, 854x480 letterboxed and under Crop, 480x854 portrait,
 # the 704x480 10:11 snap, 192x2048 decimated 2 x 4, 2048x192 decimated 2, 640x480
@@ -122,6 +124,15 @@
 #   the 2 MiB stores (interface 0.11, 1280x720: [fit] hd, a 3,600-macroblock store at store 17):
 #   H1  disp: the store shift 17 (1 MiB stores)                      -> [fit] hd / [ddr] (outside the window)
 #   H2  disp: Cr's plane offset in 17 bits (40 W HF = 144,000 wraps)  -> [fit] hd
+#   chroma interpolated at the identity fit (docs/display.md "Chroma at the identity"; the golden's
+#   up_ident / up_field, checked against ffmpeg's in_chroma_loc=left upsampling within a code):
+#   Z1  disp: the odd / even column swapped                          -> [rgb]
+#   Z2  disp: the horizontal blend's rounding dropped (Cb of row b)  -> [rgb]
+#   Z3  disp: the vertical blend's rows swapped (2m takes d)         -> [rgb]
+#   Z4  disp: the vertical blend on a store of fields                -> [field]
+#   Z5  disp: the ahead read not clamped to the crop's last sample   -> [rgb] (the right edge)
+#   Z6  disp: no interpolation at the identity (nearest)             -> [rgb]
+#   Z7  disp: interpolation off the identity (480i)                  -> [il]
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim
@@ -172,8 +183,8 @@ DISP_ARMS=(
   "disp_bob1|+arm=bob +field +mode=1 +parity=1 +want=$G/disp_want_bob1.hex"
   "disp_single_w|+arm=single +field +single +mode=0 +parity=1 +want=$G/disp_want_bob1.hex"
   "disp_single_l|+arm=single +field +single +mode=2 +parity=0 +want=$G/disp_want_bob0.hex"
-  "disp_il|+arm=il +il"
-  "disp_il_field|+arm=il +il +field +mode=2 +want=$G/disp_want_field.hex"
+  "disp_il|+arm=il +il +want=$G/disp_want_frame_il.hex"
+  "disp_il_field|+arm=il +il +field +mode=2 +want=$G/disp_want_field_il.hex"
   "disp_colswap|+arm=colour +colswap=3"
 )
 for c in 2 3 4 5 6; do DISP_ARMS+=("disp_c$c|+arm=colour +colour=$c +want=$G/disp_want_frame_c$c.hex"); done
@@ -265,8 +276,8 @@ PYEOF
   mut K9 $D "wire         bob  = pic_field && (pic_single || k_mode == 2'd1);" "wire         bob  = pic_field && (k_mode == 2'd1);" $DT "single" "$O" "+arm=single +field +single +mode=0 +parity=1 +want=$G/disp_want_bob1.hex" & throttle
   mut K10 $D "if (ln_first) begin tag_v <= '0; k_mode <= deint_mode; k_col <= pic_colour; end" "if (ln_first) begin tag_v <= '0; k_mode <= 2'd0; k_col <= pic_colour; end" $DT "blend" "$O" "$BL" & throttle
   wait
-  mut I1 $D "else if (!il || (h_pos[0] && h_pos != 12'd1)) xacc <=" "else if (1'b1) xacc <=" $DT "il" "$O" "+arm=il +il" & throttle
-  mut I2 $D "wire         ident = !il && (r_sx" "wire         ident = (r_sx" $DT "il" "$O" "+arm=il +il +field +mode=2 +want=$G/disp_want_field.hex" & throttle
+  mut I1 $D "else if (!il || (h_pos[0] && h_pos != 12'd1)) xacc <=" "else if (1'b1) xacc <=" $DT "il" "$O" "+arm=il +il +want=$G/disp_want_frame_il.hex" & throttle
+  mut I2 $D "wire         ident = !il && (r_sx" "wire         ident = (r_sx" $DT "il" "$O" "+arm=il +il +field +mode=2 +want=$G/disp_want_field_il.hex" & throttle
   mut R1 $D "s3_db * \$signed({1'b0, s3_w})" "s3_db * \$signed(9'sd0)" $DT "fit" "$O" "$(fit_args p640)" & throttle
   mut R2 $D "{1'b0, s4_hd} * {1'b0, s4_wy}" "{1'b0, s4_hb} * {1'b0, s4_wy}" $DT "fit" "$O" "$(fit_args v)" & throttle
   mut R3 $D "3'd1: out_l[i] = (hq[i] + 21'd64)   >> 7;" "3'd1: out_l[i] = hq[i] >> 7;" $DT "fit" "$O" "$(fit_args wide)" & throttle
@@ -311,6 +322,15 @@ PYEOF
   wait
   mut C7 $D "        case (k_col)" "        case (3'd1)" $DT "colour" "$O" "$(ca 3)" & throttle
   mut C8 $D "        case (k_col)" "        case (pic_colour)" $DT "colour" "$O" "+arm=colour +colswap=3" & throttle
+  wait
+  # (docs/display.md "Chroma at the identity") chroma interpolated at the identity fit
+  mut Z1 $D "wire         hxi  = s3_hi && s3_cx;" "wire         hxi  = s3_hi && !s3_cx;" $DT "rgb" "$O" & throttle
+  mut Z2 $D "hx_ub = {1'b0, r4_ub} + {1'b0, s3_ub} + 9'd1" "hx_ub = {1'b0, r4_ub} + {1'b0, s3_ub} + 9'd0" $DT "rgb" "$O" & throttle
+  mut Z3 $D "{2'd0, s4_rp ? s4_ud : s4_ua} + 10'd2;" "{2'd0, s4_rp ? s4_ua : s4_ud} + 10'd2;" $DT "rgb" "$O" & throttle
+  mut Z4 $D "s0_vi <= ident && !pic_field;" "s0_vi <= ident;" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
+  mut Z5 $D "(c_up > c_lm) ? c_lm[10:0] : c_up[10:0];" "c_up[10:0];" $DT "rgb" "$O" & throttle
+  mut Z6 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b0; s0_vi" $DT "rgb" "$O" & throttle
+  mut Z7 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b1; s0_vi" $DT "il" "$O" "+arm=il +il +want=$G/disp_want_frame_il.hex" & throttle
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

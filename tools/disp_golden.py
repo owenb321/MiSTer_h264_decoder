@@ -5,13 +5,22 @@
 as 7 hex digits (de 0 and black beyond the picture). The RGB is the BT.601 limited-range
 integer conversion h264/disp_reader.sv states, of each dot's Y / Cb / Cr:
 
-  frame   the store as a FRAME: luma line y takes chroma row y >> 1
+  frame   the store as a FRAME at the identity fit (progressive, 1:1): chroma INTERPOLATED at
+          H.264's default siting (chroma_sample_loc_type 0; docs/display.md "Chroma at the
+          identity"): horizontally co-sited with even luma columns -- odd column x = (c[x >> 1] +
+          c[(x + 1) >> 1] + 1) >> 1, the right edge replicated -- then vertically between luma
+          rows 2m and 2m + 1 -- row 2m = (3 h[m] + h[m - 1] + 2) >> 2, 2m + 1 = (3 h[m] + h[m + 1]
+          + 2) >> 2, the edges replicated; checked here against ffmpeg's own upsampling
+          (scale=in_chroma_loc=left, bilinear, full_chroma_int) within one code
+  frame_il  the same store at 480i (not the identity): chroma NEAREST, luma line y takes chroma row y >> 1
   field   the store as a FIELD PAIR (line-interleaved), woven: luma line y takes its own
           field's chroma. That siting is NOT computed here from the RTL's formula
           (2 (y >> 2) + (y & 1)): ffmpeg's `separatefields` splits the woven picture into
           its two fields (every plane, chroma included, line-interleaved -- the layout the
           reconstruction writes and ffmpeg decodes to), each field's chroma is expanded with
-          the plain 4:2:0 rule of its own planes, and the two are woven back.
+          its own planes -- horizontally interpolated as the frame's, vertically nearest (the
+          rows above and below are the other field's) -- and the two are woven back; field_il
+          is the same with chroma nearest (480i).
   blend   the field pair's 4:4:4 lines through ffmpeg's `interlace` lowpass (vf_tinterlace:
           (1 + a + 2b + d) >> 2 on every line, per plane), the Blend kernel's definition. The
           filter clamps each FIELD's first and last lines to themselves; the reader mirrors
@@ -63,8 +72,44 @@ def words(p):
 
 
 def up(c):
-    """4:2:0 chroma -> one sample per luma dot (rows sited on luma row pairs)."""
+    """4:2:0 chroma -> one sample per luma dot, NEAREST (rows sited on luma row pairs): every
+    output that is not the identity fit (480i, a scaled picture)."""
     return np.repeat(np.repeat(c, 2, 0), 2, 1)
+
+
+def hup(c, cols=None, last=None):
+    """(docs/display.md "Chroma at the identity") horizontal interpolation at H.264's default siting:
+    luma column x takes c[x >> 1] (x even) or (c[x >> 1] + c[min((x + 1) >> 1, last)] + 1) >> 1 (x odd);
+    `last` the crop's last chroma sample (kmax_x >> 1), `cols` the luma columns wanted (all by default)."""
+    c = np.asarray(c, np.int64)
+    if cols is None:
+        cols = np.arange(2 * c.shape[1])
+    if last is None:
+        last = c.shape[1] - 1
+    n, nx = cols >> 1, np.minimum((cols + 1) >> 1, last)
+    return np.where(cols & 1, (c[:, n] + c[:, nx] + 1) >> 1, c[:, n])
+
+
+def vrow(h, k, kmin, kmax):
+    """the vertical interpolation of luma row k of a FRAME (h: the horizontally interpolated chroma
+    rows), with the reader's rows a / d at the identity: a = k - 1 (k + 1 at the first row), d = k + 1
+    (k - 1 at the last) -- their chroma rows >> 1; row 2m weighs a's, 2m + 1 d's"""
+    ra = (k if k == kmax else k + 1) if k == kmin else k - 1
+    rd = (k if k == kmin else k - 1) if k == kmax else k + 1
+    o = ra if (k & 1) == 0 else rd
+    return (3 * h[k >> 1] + h[o >> 1] + 2) >> 2
+
+
+def up_ident(c):
+    """a whole frame's chroma at the identity (no crop): horizontal, then vertical"""
+    h = hup(c)
+    H = 2 * c.shape[0]
+    return np.stack([vrow(h, k, 0, H - 1) for k in range(H)])
+
+
+def up_field(c):
+    """one field's chroma at the identity: horizontal only (vertically nearest within the field)"""
+    return np.repeat(hup(c), 2, 0)
 
 
 def rgb(Y, U, V, code=1):
@@ -104,12 +149,14 @@ def fields(Y, Cb, Cr):
     return res
 
 
-def woven444(Y, Cb, Cr):
-    """Every luma line with its own field's chroma, woven (H x W, three planes)."""
+def woven444(Y, Cb, Cr, cup=None):
+    """Every luma line with its own field's chroma, woven (H x W, three planes); `cup` the chroma
+    expansion of each field (up_field at the identity, up -- nearest -- at 480i)."""
+    cup = up_field if cup is None else cup
     H, W = Y.shape
     planes = [np.zeros((H, W), np.int64) for _ in range(3)]
     for p, (yp, cb, cr) in enumerate(fields(Y, Cb, Cr)):
-        planes[0][p::2], planes[1][p::2], planes[2][p::2] = yp, up(cb), up(cr)
+        planes[0][p::2], planes[1][p::2], planes[2][p::2] = yp, cup(cb), cup(cr)
     return planes
 
 
@@ -165,11 +212,43 @@ def write_store(name, Y, Cb, Cr):
 # L: 720x480 (seed 7: the picture the frame / field fixtures have always used)
 L = picture(7, 720, 480)
 write_store("disp_store.hex", *L)
-write_want("disp_want_frame.hex", rgb(L[0], up(L[1]), up(L[2])))
+write_want("disp_want_frame.hex", rgb(L[0], up_ident(L[1]), up_ident(L[2])))
 for _c in range(2, 7):                            # (0.16) the frame under every other colour code
-    write_want("disp_want_frame_c%d.hex" % _c, rgb(L[0], up(L[1]), up(L[2]), _c))
+    write_want("disp_want_frame_c%d.hex" % _c, rgb(L[0], up_ident(L[1]), up_ident(L[2]), _c))
+write_want("disp_want_frame_il.hex", rgb(L[0], up(L[1]), up(L[2])))       # 480i: chroma nearest
+write_want("disp_want_field_il.hex", rgb(*woven444(*L, cup=up)))
 Lf = woven444(*L)
 write_want("disp_want_field.hex", rgb(*Lf))
+
+
+def check_chroma_oracle(c):
+    """the independent check of the identity's chroma: ffmpeg's own 4:2:0 -> 4:4:4 upsampling at
+    H.264's default siting (in_chroma_loc=left; validated on an impulse 2026-10-09: the even column
+    full, odd neighbours one half; luma rows 2m / 2m + 1 three quarters, the rows beyond one quarter)
+    against up_ident, within one code (ffmpeg rounds once, the reader twice)"""
+    if not HAVE_FFMPEG:
+        print("disp_golden: identity chroma NOT checked (no ffmpeg)")
+        return
+    h, w = c.shape
+    Yp = np.full((2 * h, 2 * w), 128)
+    with tempfile.TemporaryDirectory() as d:
+        src, dst = os.path.join(d, "in.yuv"), os.path.join(d, "out.yuv")
+        with open(src, "wb") as f:
+            f.write(b"".join(p.astype(np.uint8).tobytes() for p in (Yp, c, c)))
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "%dx%d" % (2 * w, 2 * h),
+                        "-i", src, "-vf", "scale=in_chroma_loc=left:flags=bilinear+full_chroma_int+accurate_rnd",
+                        "-f", "rawvideo", "-pix_fmt", "yuv444p", dst], check=True)
+        raw = np.frombuffer(open(dst, "rb").read(), np.uint8).astype(np.int64)
+    n = 4 * h * w
+    assert raw.size == 3 * n, "ffmpeg's upsample: %d bytes" % raw.size
+    ref = raw[n:2 * n].reshape(2 * h, 2 * w)       # the U plane
+    ours = up_ident(c)
+    d = np.abs(ours - ref)[1:-1, 1:-2]            # (ffmpeg's own edge rule at the borders)
+    assert d.max() <= 1, "identity chroma %d codes from ffmpeg's upsampling" % d.max()
+    print("disp_golden: identity chroma within %d code of ffmpeg's upsampling (in_chroma_loc=left)" % d.max())
+
+
+check_chroma_oracle(L[1])
 write_want("disp_want_blend.hex", rgb(*blend(Lf)))
 write_want("disp_want_bob0.hex", rgb(*bob(Lf, 0)))
 write_want("disp_want_bob1.hex", rgb(*bob(Lf, 1)))
@@ -251,12 +330,24 @@ def render(Y, Cb, Cr, f, luma=None):
     kx0, kx1, wx = taps(f, xs - f['ox0'], 'x')
     sh, sv = _fr.pf_shift(f['hpf']), _fr.pf_shift(f['vpf'])
     cx = (np.where(wx + 32 * (sh % 8) >= 128, kx1, kx0) + sh // 8) >> 1
+    # (docs/display.md "Chroma at the identity") the identity fit on a progressive raster: chroma
+    # interpolated at H.264's default siting -- hup over the crop's columns, then vrow -- instead of
+    # nearest; every other fit keeps chroma nearest
+    ident = (not f.get('il', False)) and f['sx'] == (1 << _fr.Q) and f['sy'] == (1 << _fr.Q) and \
+        f['dh'] == 1 and f['dv'] == 1
+    if ident:
+        lastc = (f['lx'] + f['wc'] - 1) >> 1
+        kmin_y, kmax_y = f['ty'], f['ty'] + f['hc'] - 1
+        hU, hV = hup(Ud, kx0, lastc), hup(Vd, kx0, lastc)
     for L in range(max(0, f['oy0']), min(rh, f['oy0'] + f['oh'])):
         ky0, ky1, wy = taps(f, np.array([L - f['oy0']]), 'y')
         ky0, ky1, wy = int(ky0[0]), int(ky1[0]), int(wy[0])
         y = lerp(lerp(Yd[ky0, kx0], Yd[ky0, kx1], wx), lerp(Yd[ky1, kx0], Yd[ky1, kx1], wx), wy)
         cy = ((ky1 if wy + 32 * (sv % 8) >= 128 else ky0) + sv // 8) >> 1
-        img[L, x0:x1] = rgb(y, Ud[cy, cx], Vd[cy, cx])
+        if ident:
+            img[L, x0:x1] = rgb(y, vrow(hU, ky0, kmin_y, kmax_y), vrow(hV, ky0, kmin_y, kmax_y))
+        else:
+            img[L, x0:x1] = rgb(y, Ud[cy, cx], Vd[cy, cx])
         if luma is not None:
             luma[L] = y
             luma.setdefault('cx', cx)                 # the chroma taps chosen (check_filter scores them)

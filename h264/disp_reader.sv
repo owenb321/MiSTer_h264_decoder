@@ -14,7 +14,13 @@
 // in decimated units (p - (d - 1) / 2) / d, clamped to the crop: luma is the 2-tap blend
 // (a (256 - w) + b w + 128) >> 8 horizontally on rows k and k + 1, then vertically; chroma
 // is NEAREST (the luma tap k + (w >= 128), >> 1: chroma is decimated by the same factors,
-// so the 4:2:0 ratio holds). Outside the rectangle: black, de_out 0. At 480i frame line L
+// so the 4:2:0 ratio holds) -- except at the identity fit (CHROMA AT THE IDENTITY, docs/display.md:
+// Native (HDMI), the 1:1 Progressive picture), where chroma is INTERPOLATED at H.264's default siting
+// (chroma_sample_loc_type 0): an odd column (c[x >> 1] + c[(x + 1) >> 1] + 1) >> 1, then on a frame
+// store row 2m (3 c[m] + c[m - 1] + 2) >> 2, row 2m + 1 (3 c[m] + c[m + 1] + 2) >> 2 -- the
+// hard 2-pixel colour steps nearest leaves beside saturated detail (red above all) gone, at
+// shifts and adds: the neighbours are the previous dot's read and the kernel's rows a / d, already
+// held. Outside the rectangle: black, de_out 0. At 480i frame line L
 // is v_pos (the field's own lines): every field is its own sample of the one resample.
 //
 // ANTI-TWITTER (P6 step 4, docs/analog.md §9; fit_vpf 4, published by disp_fit: the option,
@@ -516,10 +522,15 @@ module disp_reader #(
     logic [7:0]  s0_f, s0_wy;
     logic [1:0]  s0_sa, s0_sb, s0_sd, s0_sc, s0_kern;
     logic        s0_in, s0_ko;
+    // (docs/display.md "Chroma at the identity") chroma interpolated: horizontally at the identity
+    // (hi), vertically too on a frame store (vi; a store of fields keeps its kernel: rows a / d are the
+    // other field's), the row's parity (rp: 2m weighs row a's chroma, 2m + 1 row d's)
+    logic        s0_hi, s0_vi, s0_rp;
     always_ff @(posedge clk) if (ce) begin
         s0_k <= px_u[44:16]; s0_f <= px_u[15:8];
         s0_sa <= e_sa; s0_sb <= e_sb; s0_sd <= e_sd; s0_sc <= e_sc; s0_wy <= e_wy; s0_ko <= e_ko;
         s0_kern <= kern;
+        s0_hi <= ident; s0_vi <= ident && !pic_field; s0_rp <= e_par;
         s0_in <= pic_valid && de_in && e_in && in_x;
     end
     // stage 1: the taps, clamped to the crop, and the RAM addresses
@@ -531,9 +542,15 @@ module disp_reader #(
     wire  [7:0]  wa   = x_k0[10:3];                     // the first tap's word
     wire  [6:0]  a_ev = (wa + 8'd1) >> 1;               // the even bank holds wa or wa + 1
     wire  [6:0]  a_od = wa[7:1];                        // the odd bank the other
-    // chroma: the tap nearer the UNSHIFTED position (§11b: + 32 A), >> 1
+    // chroma: the tap nearer the UNSHIFTED position (§11b: + 32 A), >> 1 -- or (docs/display.md "Chroma
+    // at the identity") at the identity fit the sample AHEAD, (x + 1) >> 1 clamped to the crop's last:
+    // an even column's own, an odd column's right neighbour; its left neighbour is the previous dot's
+    // read (at the identity the column steps by one a dot, and a line's first shown column is even:
+    // the crop's lx is even, H.264's CropUnitX / the PICTURE record's pairs), blended in stage 4
     wire  [10:0] c_t  = ({1'b0, x_w} + {1'b0, sh_h[2:0], 5'd0} >= 9'd128) ? x_k1 : x_k0;
-    wire  [10:0] c_n  = c_t >> 1;
+    wire  [11:0] c_up = ({1'b0, x_k0} + 12'd1) >> 1;
+    wire  [11:0] c_lm = {1'b0, kmax_x[11:1]};
+    wire  [10:0] c_n  = !ident ? (c_t >> 1) : (c_up > c_lm) ? c_lm[10:0] : c_up[10:0];
     // (the RAM words, on the dot like every stage: read every clock, the register would hold the
     // NEXT dot's word by the time the next stage takes it beside this dot's byte selects)
     logic [63:0] q_ya, q_ybe, q_ybo, q_yde, q_ydo, q_cba, q_cbb, q_cbd, q_cra, q_crb, q_crd;
@@ -562,6 +579,7 @@ module disp_reader #(
     logic [7:0]  s1_w, s1_wy, s2_w, s2_wy;
     logic [1:0]  s1_k, s2_k;
     logic        s1_in, s2_in, s1_ko, s2_ko;
+    logic        s1_cx, s2_cx, s3_cx, s1_hi, s2_hi, s3_hi, s1_vi, s2_vi, s3_vi, s4_vi, s1_rp, s2_rp, s3_rp, s4_rp;
     // stage 3: the bytes (and the horizontal differences)
     wire  [63:0] yb_w0 = s2_wodd ? q2_ybo : q2_ybe, yb_w1 = s2_wodd ? q2_ybe : q2_ybo;   // word wa, wa + 1
     wire  [63:0] yd_w0 = s2_wodd ? q2_ydo : q2_yde, yd_w1 = s2_wodd ? q2_yde : q2_ydo;
@@ -609,6 +627,14 @@ module disp_reader #(
     logic [7:0]  s4_hb, s4_hd, s4_ya, s4_ua, s4_ub, s4_ud, s4_va, s4_vb, s4_vd, s4_wy;
     logic [1:0]  s4_k;
     logic        s4_in, s4_ko;
+    // (docs/display.md "Chroma at the identity") stage 4's chroma, horizontally: the previous dot's raw
+    // bytes (r4_*: the left neighbour c[x >> 1] of an odd column x, whose own read was c[(x + 1) >> 1]),
+    // (c[x >> 1] + c[(x + 1) >> 1] + 1) >> 1 on an odd column, the read itself on an even one
+    logic [7:0]  r4_ua, r4_ub, r4_ud, r4_va, r4_vb, r4_vd;
+    wire         hxi  = s3_hi && s3_cx;
+    wire  [8:0]  hx_ua = {1'b0, r4_ua} + {1'b0, s3_ua} + 9'd1, hx_ub = {1'b0, r4_ub} + {1'b0, s3_ub} + 9'd1,
+                 hx_ud = {1'b0, r4_ud} + {1'b0, s3_ud} + 9'd1, hx_va = {1'b0, r4_va} + {1'b0, s3_va} + 9'd1,
+                 hx_vb = {1'b0, r4_vb} + {1'b0, s3_vb} + 9'd1, hx_vd = {1'b0, r4_vd} + {1'b0, s3_vd} + 9'd1;
     // stage 5: the vertical blend or the kernel
     wire  [9:0]  yl = {2'd0, s4_ya} + {1'd0, s4_hb, 1'b0} + {2'd0, s4_hd} + 10'd1;
     wire  [9:0]  ul = {2'd0, s4_ua} + {1'd0, s4_ub, 1'b0} + {2'd0, s4_ud} + 10'd1;
@@ -620,8 +646,14 @@ module disp_reader #(
     // 256 b + (d - b) w + 128, without a subtract in front of the multiply: hd_raster's 81 MHz)
     wire  [8:0]  iwy  = 9'd256 - {1'b0, s4_wy};
     wire  [17:0] yv_s = {1'b0, s4_hb} * iwy + {1'b0, s4_hd} * {1'b0, s4_wy} + 18'd128;
-    wire  [7:0]  uk = (s4_k == 2'd2) ? ul[9:2] : (s4_k == 2'd1) ? um[8:1] : s4_ub;
-    wire  [7:0]  vk = (s4_k == 2'd2) ? vl[9:2] : (s4_k == 2'd1) ? vm[8:1] : s4_vb;
+    // (docs/display.md "Chroma at the identity") a frame store's chroma, vertically: H.264's default
+    // siting puts chroma row m between luma rows 2m and 2m + 1, so row 2m = (3 b + a + 2) >> 2 and
+    // 2m + 1 = (3 b + d + 2) >> 2 (a / d the rows above / below: their chroma rows m - 1 / m + 1; at the
+    // picture's first / last row the reader's mirror makes them row m itself)
+    wire  [9:0]  uy = {1'b0, s4_ub, 1'b0} + {2'd0, s4_ub} + {2'd0, s4_rp ? s4_ud : s4_ua} + 10'd2;
+    wire  [9:0]  vy = {1'b0, s4_vb, 1'b0} + {2'd0, s4_vb} + {2'd0, s4_rp ? s4_vd : s4_va} + 10'd2;
+    wire  [7:0]  uk = (s4_k == 2'd2) ? ul[9:2] : (s4_k == 2'd1) ? um[8:1] : s4_vi ? uy[9:2] : s4_ub;
+    wire  [7:0]  vk = (s4_k == 2'd2) ? vl[9:2] : (s4_k == 2'd1) ? vm[8:1] : s4_vi ? vy[9:2] : s4_vb;
     logic [7:0]  s5_yl, s5_ym, s5_yv, s5_yb, s5_u, s5_v;   // luma's candidates: chosen in stage 6
     logic [1:0]  s5_k;
     logic        s5_ko;
@@ -652,6 +684,10 @@ module disp_reader #(
         if (!rst_n) begin
             s1_b0 <= '0; s1_b1 <= '0; s1_bc <= '0; s1_wodd <= 1'b0; s1_same <= 1'b1; s1_w <= '0; s1_wy <= '0;
             s1_k <= '0; s1_in <= 1'b0; s1_ko <= 1'b0;
+            s1_cx <= 1'b0; s2_cx <= 1'b0; s3_cx <= 1'b0; s1_hi <= 1'b0; s2_hi <= 1'b0; s3_hi <= 1'b0;
+            s1_vi <= 1'b0; s2_vi <= 1'b0; s3_vi <= 1'b0; s4_vi <= 1'b0;
+            s1_rp <= 1'b0; s2_rp <= 1'b0; s3_rp <= 1'b0; s4_rp <= 1'b0;
+            r4_ua <= '0; r4_ub <= '0; r4_ud <= '0; r4_va <= '0; r4_vb <= '0; r4_vd <= '0;
             s2_b0 <= '0; s2_b1 <= '0; s2_bc <= '0; s2_wodd <= 1'b0; s2_same <= 1'b1; s2_w <= '0; s2_wy <= '0;
             s2_k <= '0; s2_in <= 1'b0; s2_ko <= 1'b0;
             s3_b0 <= '0; s3_d0 <= '0; s3_ya <= '0; s3_ua <= '0; s3_ub <= '0; s3_ud <= '0; s3_va <= '0; s3_vb <= '0;
@@ -668,19 +704,25 @@ module disp_reader #(
             s1_b0 <= x_k0[2:0]; s1_b1 <= x_k1[2:0]; s1_bc <= c_n[2:0];
             s1_wodd <= wa[0]; s1_same <= (x_k1[10:3] == wa);
             s1_w <= x_w; s1_wy <= s0_wy; s1_k <= s0_kern; s1_in <= s0_in; s1_ko <= s0_ko;
+            s1_cx <= x_k0[0]; s1_hi <= s0_hi; s1_vi <= s0_vi; s1_rp <= s0_rp;
             // stage 2 (the RAM's output register)
             s2_b0 <= s1_b0; s2_b1 <= s1_b1; s2_bc <= s1_bc; s2_wodd <= s1_wodd; s2_same <= s1_same;
             s2_w <= s1_w; s2_wy <= s1_wy; s2_k <= s1_k; s2_in <= s1_in; s2_ko <= s1_ko;
+            s2_cx <= s1_cx; s2_hi <= s1_hi; s2_vi <= s1_vi; s2_rp <= s1_rp;
             // stage 3: the bytes (the kernel's a is its first tap)
             s3_b0 <= sb0; s3_d0 <= sd0; s3_ya <= sa_;
             s3_db <= $signed({2'b0, sb1}) - $signed({2'b0, sb0});
             s3_dd <= $signed({2'b0, sd1}) - $signed({2'b0, sd0});
             s3_ua <= su_a; s3_ub <= su_b; s3_ud <= su_d; s3_va <= sv_a; s3_vb <= sv_b; s3_vd <= sv_d;
             s3_w <= s2_w; s3_wy <= s2_wy; s3_k <= s2_k; s3_in <= s2_in; s3_ko <= s2_ko;
+            s3_cx <= s2_cx; s3_hi <= s2_hi; s3_vi <= s2_vi; s3_rp <= s2_rp;
             // stage 4: the horizontal blend
             s4_hb <= hb_s[15:8]; s4_hd <= hd_s[15:8];
-            s4_ya <= s3_ya; s4_ua <= s3_ua; s4_ub <= s3_ub; s4_ud <= s3_ud; s4_va <= s3_va; s4_vb <= s3_vb; s4_vd <= s3_vd;
-            s4_wy <= s3_wy; s4_k <= s3_k; s4_in <= s3_in; s4_ko <= s3_ko;
+            s4_ya <= s3_ya;
+            s4_ua <= hxi ? hx_ua[8:1] : s3_ua; s4_ub <= hxi ? hx_ub[8:1] : s3_ub; s4_ud <= hxi ? hx_ud[8:1] : s3_ud;
+            s4_va <= hxi ? hx_va[8:1] : s3_va; s4_vb <= hxi ? hx_vb[8:1] : s3_vb; s4_vd <= hxi ? hx_vd[8:1] : s3_vd;
+            r4_ua <= s3_ua; r4_ub <= s3_ub; r4_ud <= s3_ud; r4_va <= s3_va; r4_vb <= s3_vb; r4_vd <= s3_vd;
+            s4_wy <= s3_wy; s4_k <= s3_k; s4_in <= s3_in; s4_ko <= s3_ko; s4_vi <= s3_vi; s4_rp <= s3_rp;
             // stage 5: the vertical blend / the kernel (luma's choice in stage 6)
             s5_yl <= yl[9:2]; s5_ym <= ym[8:1]; s5_yv <= yv_s[15:8]; s5_yb <= s4_hb; s5_k <= s4_k; s5_ko <= s4_ko;
             s5_u <= uk; s5_v <= vk; s5_in <= s4_in;
