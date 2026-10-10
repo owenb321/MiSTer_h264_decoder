@@ -106,6 +106,9 @@ struct player_counts {
     uint64_t rewrite_skipped;          /* (cavlc_ok) units the CAVLC rewrite could not parse, dropped */
     uint64_t pictures, pics_late, pics_nonref;   /* (arm_video) pictures sent; dropped late; seconds
                                                     decoded reference pictures only (behind) */
+    int64_t audio_lead_max;            /* 90 kHz: the most the stream's audio came ahead of its video */
+    uint64_t audio_held;               /* video packets taken while the audio waited (AUD_LEAD) */
+    uint64_t audio_forced;             /* audio packets let through early: nothing else could come */
 };
 void player_counts(const struct player *p, struct player_counts *c);
 

@@ -46,7 +46,11 @@ seek's Progress -> 1 s -> `SetSubtitleStreamIndex` -1 -> 1 s -> `SetSubtitleStre
 cannot see that) -> the client must ask again with direct play and stream copy off -> the HLS
 transcode (8 s, TS; each segment URL carries `runtimeTicks` / `actualSegmentLengthTicks` as Jellyfin's do)
 -> 2 s -> `Seek` to 4 s (the client trims the playlist to the segment holding 4 s) -> 2 s -> `SetVolume` 100
-(a report while the trimmed stream plays) -> played to its end (the Stopped report). Every wait has a
+(a report while the trimmed stream plays) -> played to its end (the Stopped report). `Play` item D
+(`docs/jellyfin.md` §12: a 1080p HEVC source, offered only as a transcode): one 10 s TS segment whose audio
+comes first after 3 s of video -- past the probe, so FFmpeg knows no sample rate -- and then 6.4 s AHEAD of
+its video in the stream, more than the core's 256 records (`tools/ts_skew.py` moves the audio's PES units,
+every timestamp as encoded) -> played to its end (the Stopped report). Every wait has a
 timeout that ends the run (the pad's and the seeks' waits only record theirs, so (o), (p), (q) score what
 happened), so a mutant that never signs in or never ends still finishes.
 
@@ -75,6 +79,8 @@ happened), so a mutant that never signs in or never ends still finishes.
 | (q) | The transcode's seek opens the playlist trimmed to the target: the first segment asked for after B's `Seek` is the one holding 4 s (the last whose start, from the EXTINF durations, is at or before it) and no earlier one is asked for (an untrimmed open probes segment 0 first); the new session starts with that segment's first access unit, an IDR with SPS / PPS, byte-identical with its PTS, and continues as the playlist's. (h) scores a report made while the trimmed stream plays. |
 | (r) | A slow subtitle answer (the switch's `.srt` answered 2.5 s late, as Jellyfin's first extraction of a file's embedded tracks is): the client's loop never stalls over 0.25 s while it waits. `test_client.c` records every stall between two of the loop's `usleep`s. |
 | (u) | Every `.srt` is asked for from 0, the whole track with its own times. The fake server puts the PlaybackInfo's `StartTimeTicks` in the DeliveryUrl, and rebases the cues by it, as Jellyfin does. The switch after the seek asks PlaybackInfo with a start of 6 s or more. |
+| (v) | Item D, the interleave: the fixture still holds its skew (from ffprobe's packets in file order: audio >= 5 s ahead, the first audio after >= 2.5 s of video); in the session, every AUDIO record within 1.3 s of the newest video PTS before it in the ring (the client's 1 s, the two access units it holds, a record's gathering: 1.16 s measured; 6.4 s in demux order); every access unit the playlist's, the last with END_OF_STREAM, the Stopped report within 1 s of the runtime. The fake core has no 256-record gate: the rule is scored directly, the core's freeze is the rig's to show. |
+| (w) | Item D, the audio the probe missed: every AUDIO record with a PTS, the PCM equal to `ffmpeg -f s16le` of the source at its PTS's place (the first 2,048 frames excused when the client started past the reference's first). |
 | (o) | The pad's seeks add up: the three RIGHT taps start exactly ONE session, its first record an IDR at the position at the cue + 90 s (3 steps of 30 s; at or before it, within a GOP); RIGHT held 1.2 s starts exactly ONE session, at least 3 steps on (1 + the repeats at 450 ms and then every 180 ms: up to 6). The position at the cue is the fake core's STC, which must be running. |
 
 ## `--red`
@@ -102,6 +108,12 @@ happened), so a mutant that never signs in or never ends still finishes.
 | M17 the raster's shape guessed 4:3, not word 47's (F9's squish under A') | T8 |
 | M18 the subtitle URL's start kept (no `whole_track`) | (u) |
 | M19 the subtitles fetched on the loop's thread (the fetcher never started) | (r) |
+| M20 (0.16) a transcode trusted to its BT.709 label (the source's ColorSpace ignored) | (k2) |
+| M21 (0.16) the source's tag ignored, the size rule alone | (k2) |
+| M22 (§12) the audio written in the demuxer's order again (never held for the video) | (v) |
+| M23 (§12) an audio stream the probe missed passed over (`av_find_best_stream` alone) | (w) |
+| M24 (§12) swr built at the open from the probe's parameters (none: the audio refused) | (w) |
+| M25 (§12) a frame without a time sent untimed (no carry from the frame before) | (w) |
 
 A mutation caught only by another check is a failure of the runner. Other checks may also go
 RED on a mutant (M2 lets the CAVLC file play, so (k) fails too); only the named one is required.

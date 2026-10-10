@@ -16,8 +16,14 @@
 #include "player.h"
 #include "vdec.h"
 
-#define QUEUE_PKTS    512                 /* the reader's queue: packets ... */
+#define QUEUE_PKTS    512                 /* the reader's video (and subtitle) queue: packets ... */
 #define QUEUE_BYTES   (6u << 20)          /* ... and bytes (the ring itself holds 8 MB) */
+#define AQUEUE_PKTS   1024                /* its audio queue: ~20 s of AAC, ~10 s of DTS ... */
+#define AQUEUE_BYTES  (2u << 20)          /* ... at most */
+#define AUD_LEAD      90000               /* audio written at most 1 s (90 kHz) ahead of the video: the
+                                             core keeps 256 records (5.12 s) it has not played and stops
+                                             reading the ring past them, the video behind them too
+                                             (docs/jellyfin.md S12) */
 #define AUD_RECORD    960                 /* audio frames gathered into one record: 20 ms (>= the library's 5 ms) */
 #define STEP_PACKETS  64                  /* packets one step moves at most (the loop stays responsive) */
 #define STEP_BUDGET_MS 10                 /* ... and the time it may spend: a write can take long (the
@@ -33,6 +39,15 @@ unsigned client_test_write_us;            /* the host test: each video write cos
 #endif
 #define PTS_MASK      ((1ull << 33) - 1)  /* the ring's PTS field */
 
+/* a bounded packet queue (the reader pushes, the loop pops; under the player's mx). Each packet
+ * carries the demuxer's order, so the loop can keep it across the two queues. */
+struct pq {
+    AVPacket *q[AQUEUE_PKTS];
+    uint64_t seq[AQUEUE_PKTS];
+    unsigned head, tail, max;             /* pop at head, push at tail; max <= AQUEUE_PKTS */
+    size_t bytes, max_bytes;
+};
+
 struct player {
     struct player_cfg cfg;
     char *url, *headers, *cafile;
@@ -41,9 +56,8 @@ struct player {
     pthread_mutex_t mx;
     pthread_cond_t cv;
     /* the reader's side (under mx) */
-    AVPacket *q[QUEUE_PKTS];
-    unsigned qhead, qtail;                /* pop at head, push at tail */
-    size_t qbytes;
+    struct pq vq, aq;                     /* the video and subtitles; the audio (docs/jellyfin.md S12) */
+    uint64_t seq;                         /* the demuxer's order: the next packet's */
     int opened, eof, failed, abort;
     char err[160];
     /* set by the reader before `opened`, read-only after */
@@ -66,6 +80,8 @@ struct player {
     enum h264check verdict;
     int started;                          /* the first (IDR) access unit written */
     int64_t first_pts;                    /* 90 kHz, the first access unit's (-1: none yet) */
+    int64_t vmax;                         /* 90 kHz, the newest video PTS handed on (-1: none yet): the
+                                             audio waits while it is more than AUD_LEAD ahead of it */
     /* the video: `hold` is the newest access unit (written once the next exists, or at the end
      * with END_OF_STREAM); `out` is one the ring had no room for yet */
     AVPacket *hold, *out;
@@ -74,6 +90,9 @@ struct player {
     int16_t *pcm;
     unsigned pcm_frames, pcm_cap;
     int64_t pcm_pts;
+    int64_t apts_next;                    /* 90 kHz: where the next decoded frame starts (-1 unknown) --
+                                             a frame without a time takes it (S12: a TS whose audio the
+                                             probe missed times only each PES's first frame) */
     int16_t *aout;
     unsigned aout_bytes;
     int64_t aout_pts;
@@ -252,8 +271,11 @@ static int open_audio(struct player *p)
     p->adec->pkt_timebase = st->time_base;
     /* AC-3 / E-AC-3 downmix in the decoder (docs/jellyfin.md S3); swr does the rest */
     av_opt_set(p->adec, "downmix", "stereo", AV_OPT_SEARCH_CHILDREN);
-    if ((rc = avcodec_open2(p->adec, dec, NULL)) < 0) return rc;
-    return swr_for(p, &p->adec->ch_layout, p->adec->sample_fmt, p->adec->sample_rate);
+    /* no swr here: audio() builds it from each frame's own layout, format and rate. A stream whose
+     * first packets came after the probe has none of them yet (sample rate 0: swr refused it, and the
+     * whole stream played silent -- a 9.6 Mbit/s transcode, 2026-10-09); its decoder learns them from
+     * the stream itself (ADTS, the AC-3 header) */
+    return avcodec_open2(p->adec, dec, NULL);
 }
 
 /* a format's name as people say it */
@@ -369,6 +391,15 @@ static void fill_info(struct player *p)
     p->have_info = 1;
 }
 
+static int pq_full(const struct pq *q) { return q->tail - q->head == q->max || q->bytes > q->max_bytes; }
+
+static AVPacket *pq_pop(struct pq *q)
+{
+    AVPacket *pkt = q->q[q->head++ % q->max];
+    q->bytes -= (size_t)pkt->size;
+    return pkt;
+}
+
 static void *reader(void *arg)
 {
     struct player *p = arg;
@@ -384,7 +415,9 @@ static void *reader(void *arg)
     av_dict_set(&opts, "rw_timeout", "15000000", 0);          /* 15 s without a byte: fail */
     av_dict_set(&opts, "reconnect", "1", 0);
     /* the probe: the server said what is coming; a short look is enough (the default reads up to
-     * 5 MB / 5 s -- about a second of a transcode's start on the rig) */
+     * 5 MB / 5 s -- about a second of a transcode's start on the rig). An audio stream it misses (a
+     * 9.6 Mbit/s transcode's can start past it) is still played: open_audio. 4 MB / 2 s was measured
+     * on the rig (docs/jellyfin.md S12): it missed the same audio and cost ~0.2 s an open */
     p->fmt->probesize = 1 << 20;
     p->fmt->max_analyze_duration = 500000;
     const char *open_url = p->url;
@@ -445,6 +478,16 @@ static void *reader(void *arg)
             p->fmt->streams[p->cfg.audio_stream]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO
           ? p->cfg.audio_stream
           : av_find_best_stream(p->fmt, AVMEDIA_TYPE_AUDIO, -1, p->vs, &best_dec, 0);
+    /* av_find_best_stream passes over an audio stream with no channels or sample rate: one whose
+     * first packets came after the probe. The first such stream a decoder was built for is played
+     * (its decoder reads them from the stream) */
+    for (unsigned i = 0; p->as < 0 && i < p->fmt->nb_streams; i++) {
+        AVCodecParameters *ap = p->fmt->streams[i]->codecpar;
+        if (ap->codec_type == AVMEDIA_TYPE_AUDIO && avcodec_find_decoder(ap->codec_id)) {
+            fprintf(stderr, "player: the audio's parameters were not in the probe: decoding them from the stream\n");
+            p->as = (int)i;
+        }
+    }
     if (p->as >= 0 && (rc = open_audio(p)) < 0) {
         fprintf(stderr, "player: no audio (%s)\n", av_err2str(rc));
         p->as = -1;
@@ -496,12 +539,14 @@ static void *reader(void *arg)
         }
         if (pkt->stream_index != p->vs && pkt->stream_index != p->as &&
             !(p->sub_of && p->sub_of[pkt->stream_index] >= 0)) { av_packet_free(&pkt); continue; }
+        struct pq *q = pkt->stream_index == p->as ? &p->aq : &p->vq;
         pthread_mutex_lock(&p->mx);
-        while (!p->abort && (p->qtail - p->qhead == QUEUE_PKTS || p->qbytes > QUEUE_BYTES))
+        while (!p->abort && pq_full(q))
             pthread_cond_wait(&p->cv, &p->mx);
         if (p->abort) { pthread_mutex_unlock(&p->mx); av_packet_free(&pkt); break; }
-        p->q[p->qtail++ % QUEUE_PKTS] = pkt;
-        p->qbytes += (size_t)pkt->size;
+        q->seq[q->tail % q->max] = p->seq++;
+        q->q[q->tail++ % q->max] = pkt;
+        q->bytes += (size_t)pkt->size;
         pthread_mutex_unlock(&p->mx);
     }
     return NULL;
@@ -509,26 +554,51 @@ static void *reader(void *arg)
 
 /* ---- the loop's side ---- */
 
-static AVPacket *pop(struct player *p, int *eof)
-{
-    AVPacket *pkt = NULL;
-    pthread_mutex_lock(&p->mx);
-    if (p->qhead != p->qtail) {
-        pkt = p->q[p->qhead++ % QUEUE_PKTS];
-        p->qbytes -= (size_t)pkt->size;
-        pthread_cond_broadcast(&p->cv);
-    }
-    *eof = p->eof && p->qhead == p->qtail;
-    pthread_mutex_unlock(&p->mx);
-    return pkt;
-}
-
 static int64_t pts90(const struct player *p, const AVPacket *pkt, int stream)
 {
     int64_t t = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
     if (t == AV_NOPTS_VALUE) return -1;
     t = av_rescale_q(t, p->fmt->streams[stream]->time_base, (AVRational){1, 90000});
     return t < 0 ? -1 : t;
+}
+
+/* the next packet to write: the demuxer's order, except that audio waits while it is more than
+ * AUD_LEAD ahead of the newest video handed on, and before the first picture (docs/jellyfin.md S12:
+ * a transcode's audio 5 s ahead filled the core's 256 records and starved the picture). The video
+ * goes on meanwhile. The audio goes anyway when nothing else can come: the video queue empty and
+ * the reader done, or the audio queue full (the reader waits for room in it -- an audio-only stretch). */
+static AVPacket *take(struct player *p, int *eof)
+{
+    AVPacket *pkt = NULL;
+    pthread_mutex_lock(&p->mx);
+    struct pq *a = &p->aq, *v = &p->vq;
+    int have_a = a->head != a->tail, have_v = v->head != v->tail;
+    if (have_a) {
+        int64_t t = pts90(p, a->q[a->head % a->max], p->as);
+        if (t < 0) t = p->apts_next;          /* untimed (a PES's later frames): where the audio has reached */
+        int ok = p->started && (t < 0 || p->vmax < 0 || t <= p->vmax + AUD_LEAD);
+        if (p->started && t >= 0 && p->vmax >= 0 && t - p->vmax > p->n.audio_lead_max)
+            p->n.audio_lead_max = t - p->vmax;
+        if (ok && (!have_v || a->seq[a->head % a->max] < v->seq[v->head % v->max])) {
+            pkt = pq_pop(a);
+        } else if (!ok && !have_v && (p->eof || pq_full(a))) {
+            pkt = pq_pop(a);
+            if (!p->eof) p->n.audio_forced++;
+        } else if (!ok && have_v && p->started) {
+            p->n.audio_held++;
+        }
+    }
+    if (!pkt && have_v) {
+        pkt = pq_pop(v);
+        if (pkt->stream_index == p->vs) {
+            int64_t t = pts90(p, pkt, p->vs);
+            if (t > p->vmax) p->vmax = t;
+        }
+    }
+    if (pkt) pthread_cond_broadcast(&p->cv);
+    *eof = p->eof && a->head == a->tail && v->head == v->tail;
+    pthread_mutex_unlock(&p->mx);
+    return pkt;
 }
 
 /* write the access unit in `out`; 0 written (or nothing to write), -EAGAIN no room yet */
@@ -586,16 +656,19 @@ static void seal_pcm(struct player *p)
 
 static void audio(struct player *p, AVPacket *pkt)
 {
-    int64_t t = pts90(p, pkt, p->as);
     /* nothing before the first picture: the session opens with its IDR (and audio older than
-     * it would only be dropped by the core's clock) */
-    if (!p->started || (t >= 0 && p->first_pts >= 0 && t < p->first_pts)) return;
+     * it would only be dropped by the core's clock) -- by each FRAME's time, below: a packet
+     * without one (a PES's later frames) is placed by the frames before it */
+    if (!p->started) return;
     if (avcodec_send_packet(p->adec, pkt) < 0) return;
     AVFrame *fr = av_frame_alloc();
     while (fr && avcodec_receive_frame(p->adec, fr) == 0) {
         int64_t ft = fr->best_effort_timestamp;
-        int64_t fpts = ft == AV_NOPTS_VALUE ? -1
+        int64_t fpts = ft == AV_NOPTS_VALUE ? p->apts_next
                      : av_rescale_q(ft, p->fmt->streams[p->as]->time_base, (AVRational){1, 90000});
+        p->apts_next = fpts >= 0 && fr->sample_rate > 0
+                     ? fpts + av_rescale(fr->nb_samples, 90000, fr->sample_rate) : -1;
+        if (fpts >= 0 && p->first_pts >= 0 && fpts < p->first_pts) { av_frame_unref(fr); continue; }
         if (swr_for(p, &fr->ch_layout, fr->format, fr->sample_rate) < 0) { av_frame_unref(fr); continue; }
         int out_max = swr_get_out_samples(p->swr, fr->nb_samples);
         if (out_max > 0 && p->pcm_frames + (unsigned)out_max > p->pcm_cap) {
@@ -817,7 +890,7 @@ enum player_state player_step(struct player *p, h264ring *r)
             p->vpend = NULL;
         }
         int eof;
-        AVPacket *pkt = pop(p, &eof);
+        AVPacket *pkt = take(p, &eof);
         if (pkt && !p->t_pkt) p->t_pkt = mono_ms();
         if (!pkt) {
             pthread_mutex_lock(&p->mx);
@@ -881,7 +954,9 @@ int player_open(struct player **pp, const struct player_cfg *cfg)
     p->headers = cfg->headers ? strdup(cfg->headers) : NULL;
     p->cafile = cfg->cafile ? strdup(cfg->cafile) : NULL;
     p->vs = p->as = -1;
-    p->first_pts = -1;
+    p->first_pts = p->vmax = p->apts_next = -1;
+    p->vq.max = QUEUE_PKTS; p->vq.max_bytes = QUEUE_BYTES;
+    p->aq.max = AQUEUE_PKTS; p->aq.max_bytes = AQUEUE_BYTES;
     p->t0 = mono_ms();
     p->state = PL_OPENING;
     pthread_mutex_init(&p->mx, NULL);
@@ -935,7 +1010,12 @@ void player_close(struct player *p)
     pthread_cond_broadcast(&p->cv);
     pthread_mutex_unlock(&p->mx);
     if (p->thread_up) pthread_join(p->thread, NULL);
-    while (p->qhead != p->qtail) av_packet_free(&p->q[p->qhead++ % QUEUE_PKTS]);
+    if (p->n.audio_lead_max > AUD_LEAD || p->n.audio_forced)
+        fprintf(stderr, "player: the stream's audio ran up to %.1f s ahead of its video: held back (%llu waits), "
+                "%llu packets let through early\n", (double)p->n.audio_lead_max / 90000.0,
+                (unsigned long long)p->n.audio_held, (unsigned long long)p->n.audio_forced);
+    while (p->vq.head != p->vq.tail) { AVPacket *k = pq_pop(&p->vq); av_packet_free(&k); }
+    while (p->aq.head != p->aq.tail) { AVPacket *k = pq_pop(&p->aq); av_packet_free(&k); }
     av_packet_free(&p->hold);
     av_packet_free(&p->out);
     vdec_close(p->vd);                     /* (arm_video) joins its thread */

@@ -45,6 +45,8 @@ The folder the player browses, in the order it lists them (folders first):
 | `i_mjpeg.avi` | (0.15) 1 s of MJPEG 320x240 yuvj422p at 30: 4:2:2 full range, converted to 4:2:0 limited by the library's copy |
 | `j_ffv1.mkv` | (0.15) FFV1: refused (not a codec the MiSTer decodes) |
 | `k_hd.mkv` | (0.15) MPEG-4 Part 2 1280x720: refused (larger than SD, the ARM's budget) |
+| `l_ahead.ts` | (`docs/jellyfin.md` §12) 8 s, 320x240 at 25, AAC, MPEG-TS, its audio up to 6.4 s AHEAD of its video in the file (`tools/ts_skew.py --lead 6.5`): held to ~1 s ahead |
+| `m_late.ts` | (§12) 6 s, the same (another test pattern: the scorer tells the sessions apart by their first access unit), no audio in the file's first 3 s of video (`--audio-from 3`): past the probe (no sample rate), played all the same |
 | `.hidden.mkv`, `aa_notes.txt` | Never listed. Either would sort before `b_pal`, so every press after it would land elsewhere. |
 
 ## The scenario
@@ -59,6 +61,7 @@ wait times out after 20 s, so a mutant still finishes:
    g_fast, refused (too fast): back to the list.
 6. DOWN, A: h_mpeg2i plays (pairs); its end plays i_mjpeg; its end tries j_ffv1, refused: the list.
    DOWN, A: k_hd is refused (over SD): back to the list.
+   DOWN, A: l_ahead plays; its end plays m_late; the folder's end: the list.
 7. LB, LB (the top: the folder), A, A: inner plays. It asks for 50 Hz.
 8. At 1 s, RIGHT: the seek.
 9. Back + Start: the list. B: up to the root.
@@ -88,7 +91,7 @@ the fitted 720 x 576 at 50 Hz, so the canvas is drawn for two widths.
 | (p2) | (0.15) h_mpeg2i (MPEG-2 352x240 interlaced, top first, B-pictures, a program stream): every picture a woven field pair, top first (structure 1), MD5-equal to ffmpeg's decode, with its PTS; the rate 29.97. |
 | (p3) | (0.15) i_mjpeg (MJPEG 320x240 yuvj422p): every picture equal to ffmpeg's yuvj422p decode converted by the interface's formula (chroma rows averaged, rounding up; Y' = 16 + (219 Y + 127) / 255, C' = 16 + (224 C + 127) / 255), computed in Python. |
 | T10 | (0.15, test_player.c) More than 20 pictures consumed (the stores reused), and none named a store the stand-in display held (queued or shown). |
-| (f) | The seventh file played is a_dir/inner.mkv: a folder entered. |
+| (f) | The ninth file played is a_dir/inner.mkv: a folder entered. |
 | (g) | RIGHT once makes exactly one new session. Its first AU is an IDR (SPS / PPS) at the clock's position + 30 s (at or before, within a GOP), and its AUs are the file's from there (matched by MD5 and PTS: one colour's IDRs are identical). |
 | (r1) | A settings request for 50 Hz consumed before each 25 frames/s file's first session (b_pal, inner). |
 | (r2) | A request for Auto consumed between b_pal's start and c_ok's, and after the quit press; the mirror's Refresh Rate is Auto at the end. |
@@ -96,6 +99,8 @@ the fitted 720 x 576 at 50 Hz, so the canvas is drawn for two widths.
 | (z1) | The screensaver: the overlay's corner pixels (2, 2) and (w - 3, 2) are outside every list, card and panel, so their alpha is the veil's. The fake core reads them from the page each descriptor names (`client_test_fb`). Before the idle phase they are never lit; in it, both alpha 11 (dimmed) from 3.4 s and 15 (black) from 7.0 s -- the right one on the 852-wide native raster. |
 | (z2) | The wake: within 1.5 s of the DOWN the veil is gone; no file plays after it (the A opened a_dir); the log says the press woke the screensaver. |
 | (w) | In this build every video write takes 15 ms, as the A9's CAVLC rewrite of a dense stream does. From the first press to the quit, the player's loop never stalls over 0.25 s between two of its `usleep`s (`test_player.c` records the stalls): the pad is read while writes are slow. |
+| (x) | (§12) l_ahead, the seventh session: the fixture holds its skew (>= 5 s, from ffprobe's packets); every AUDIO record within 1.3 s of the newest video PTS before it in the ring; every access unit the file's, the last with END_OF_STREAM; the PCM equal to ffmpeg's decode. |
+| (y) | (§12) m_late, the eighth: the fixture's first audio after >= 2.5 s of video; every AUDIO record with a PTS, the PCM equal to ffmpeg's decode at its PTS's place. |
 | (s2) | After X, the ASS track's dialogue as plain text ("An ASS line", a line break, "on two") between 3.0 and 5.5 s; no cue shows event fields, a tag, a literal `\N` or the drawing. |
 
 ## `--red`
@@ -130,6 +135,11 @@ the fitted 720 x 576 at 50 Hz, so the canvas is drawn for two widths.
 | M26 the last picture without END_OF_STREAM | (p1) |
 | M27 stores taken in turn without the store rule | T10 |
 | M28 every picture's PTS dropped | (p1) |
+| M29 swr built once at the open, from the decoder's layout then (dca: stereo under `downmix`, its frames 5.1) | (p4) |
+| M30 (§12) the audio written in the demuxer's order again | (x) |
+| M31 (§12) an audio stream the probe missed passed over | (y) |
+| M32 (§12) swr built at the open from the probe's parameters | (y) |
+| M33 (§12) a frame without a time sent untimed | (y) |
 
 A mutation caught only by another check is a failure of the runner. Other checks may also go RED
 on a mutant (M5 lets the 1344x720 file play, so the sessions after it shift); only the named one is

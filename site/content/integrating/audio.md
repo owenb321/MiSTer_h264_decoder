@@ -23,8 +23,16 @@ without one continues from the one before it. The library's
   one decoded frame per record is right. The core keeps at most **256 records** it has not
   yet played; past that it waits before reading further into the ring, and the video
   behind them waits too.
-- **Write audio and video in the order you have them**, the way a demuxer interleaves them:
-  audio a few hundred milliseconds ahead of the video it goes with is normal.
+- **Keep the audio within about a second of the video you have written.** Audio a few
+  hundred milliseconds ahead of the video it goes with is normal, and the order a demuxer
+  gives you is usually right. But 256 records of 20 ms are only 5.12 s. Some sources put their
+  audio further ahead than that in the stream (a server's live transcode after a seek has been
+  seen 6 s ahead). If you write them in that order, the core stops reading with the video
+  behind that audio still unread. The picture stops, and with the core as it is today it can
+  stay stopped until your program flushes the stream. So hold such audio back: write an AUDIO
+  record only when its time is at most about one second past the newest video access unit you
+  have written. Let the audio through when no more video is coming (the stream's end, or a
+  stretch with no video).
 
 ## How the core plays it
 
@@ -57,6 +65,13 @@ at once (a network stall delivering its backlog) is dropped down to 20 ms. Audio
 trails the picture by roughly 10 to 40 ms, inside what viewers perceive as in sync. The
 mode is the stream's, taken from its first access unit's LOW_LATENCY flag; audio sent
 before the first access unit is paced.
+
+!!! note "Not yet implemented: a full audio queue never stops the picture"
+    A planned 1.x core changes one rule. While the queued audio is on time -- playing, or waiting
+    for its time -- a late picture no longer moves the clock back. The clock runs on, the queued
+    audio plays, and the core reads on.
+    Video that came behind the audio is shown late, and counted, but the picture keeps moving.
+    Until then, keep your audio within a second of your video (above).
 
 **Everything is counted** in the status block (words 40-45, see
 [The interface](interface.md#the-control-block)): the audio's state, the queue, frames

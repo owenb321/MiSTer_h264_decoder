@@ -50,9 +50,13 @@ mkdir -p "$work"
 #   i_mjpeg.avi      (0.15) MJPEG 320x240 at 30, 4:2:2 full range (yuvj422p): converted to 4:2:0 limited
 #   j_ffv1.mkv       (0.15) FFV1: refused (not a codec the MiSTer decodes)
 #   k_hd.mkv         (0.15) MPEG-4 Part 2 1280x720: refused (larger than SD: the ARM's budget)
+#   l_ahead.ts       8 s, 320x240 at 25, AAC, its audio up to 6.5 s AHEAD of its video in the file
+#                    (tools/ts_skew.py; docs/jellyfin.md S12): the player holds it to ~1 s ahead
+#   m_late.ts        6 s, the same, no audio in the file's first 3 s of video: past the probe (no
+#                    sample rate), played all the same
 #   .hidden.mkv      a hidden file: never listed (it would sort first and shift every press)
 #   aa_notes.txt     not a video: never listed (likewise)
-RECIPE=7     # bump when a fixture's recipe below changes
+RECIPE=9     # bump when a fixture's recipe below changes
 fixtures() {
   local stamp="$RECIPE $(ffmpeg -version | head -1)"
   [ -f "$media/recipe" ] && [ "$(cat "$media/recipe")" = "$stamp" ] && return 0
@@ -114,25 +118,40 @@ EOF
   done
   "${ff[@]}" -copyts -i "$R/i_mjpeg.avi" -map 0:v -pix_fmt yuvj422p -f framemd5 "$media/i_mjpeg.decoded.framemd5" || return 1
   "${ff[@]}" -i "$R/i_mjpeg.avi" -map 0:v -pix_fmt yuvj422p -f rawvideo "$media/i_mjpeg.yuvj422p" || return 1
+  # (S12) the interleaves of 2026-10-09's transcode, in a file: audio far ahead; audio past the probe
+  # (different pictures: the scorer tells the two sessions apart by their first access unit)
+  local ts=(-f lavfi -i "$snd" -map 0:v -map 1:a "${x264[@]}" -x264-params keyint=25:min-keyint=25:scenecut=0
+            -c:a aac -aac_pns 0 -b:a 128k -f mpegts)
+  "${ff[@]}" -f lavfi -i "testsrc2=size=320x240:rate=25" "${ts[@]}" -t 8 "$media/l_src.ts" || return 1
+  "${ff[@]}" -f lavfi -i "testsrc=size=320x240:rate=25" "${ts[@]}" -t 6 "$media/m_src.ts" || return 1
+  python3 "$repo/tools/ts_skew.py" "$media/l_src.ts" "$R/l_ahead.ts" --lead 6.5 > "$media/l_ahead.skew" || return 1
+  python3 "$repo/tools/ts_skew.py" "$media/m_src.ts" "$R/m_late.ts" --lead 0 --audio-from 3 > "$media/m_late.skew" || return 1
+  for n in l_ahead m_late; do
+    ffprobe -v error -show_entries packet=stream_index,pts,pos -of csv=p=0 "$R/$n.ts" > "$media/$n.packets" || return 1
+    "${ff[@]}" -i "$R/$n.ts" -map 0:a -f s16le -ac 2 -ar 48000 "$media/$n.pcm" || return 1
+  done
   cp "$R/e_cavlc.mkv" "$R/.hidden.mkv"
   echo "not a video" > "$R/aa_notes.txt"
   # the references (-copyts: the CLI would otherwise rebase every timestamp to start at 0)
   local n
-  for n in a_dir/inner b_pal c_ok d_big e_cavlc f_mpeg4 g_fast j_ffv1 k_hd; do
+  for n in a_dir/inner b_pal c_ok d_big e_cavlc f_mpeg4 g_fast j_ffv1 k_hd l_ahead m_late; do
     local f; f=$(ls "$R/$n".*)
     local b; b=$(basename "$n")
     "${ff[@]}" -copyts -i "$f" -map 0:v -c copy -bsf:v h264_mp4toannexb -f framemd5 "$media/$b.framemd5" 2>/dev/null ||
       "${ff[@]}" -copyts -i "$f" -map 0:v -c copy -f framemd5 "$media/$b.framemd5" || return 1
   done
-  for n in a_dir/inner b_pal c_ok; do
+  for n in a_dir/inner b_pal c_ok l_ahead m_late; do
     local b; b=$(basename "$n")
     "${ff[@]}" -copyts -i "$(ls "$R/$n".*)" -map 0:v -c copy -bsf:v h264_mp4toannexb -f h264 "$media/$b.h264" || return 1
   done
-  local si sb sc
+  local si sb sc l0 m0
   si=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$R/a_dir/inner.mkv")
   sb=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$R/b_pal.mp4")
   sc=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$R/c_ok.mkv")
-  printf '{"inner_start": %s, "b_pal_start": %s, "c_ok_start": %s}\n' "$si" "$sb" "$sc" > "$media/fixtures.json"
+  l0=$(ffprobe -v error -select_streams a -show_entries frame=pts_time -read_intervals "%+1" -of csv=p=0 "$R/l_ahead.ts" | head -1)
+  m0=$(ffprobe -v error -select_streams a -show_entries frame=pts_time -read_intervals "%+1" -of csv=p=0 "$R/m_late.ts" | head -1)
+  printf '{"inner_start": %s, "b_pal_start": %s, "c_ok_start": %s, "l_ahead_audio_t0": %s, "m_late_audio_t0": %s}\n' \
+      "$si" "$sb" "$sc" "$l0" "$m0" > "$media/fixtures.json"
   echo "$stamp" > "$media/recipe"
 }
 fixtures || { echo "run_test: the fixtures failed"; rm -rf "$media"; exit 2; }
@@ -167,15 +186,22 @@ sleep 2
 press DOWN          # k_hd
 press A             # MPEG-4 1280x720: refused (larger than SD), the list
 sleep 2
+press DOWN          # l_ahead
+press A             # its audio 6.5 s ahead of its video in the file: held to ~1 s ahead
+wait_played 7
+wait_ended          # its end plays m_late on: its audio past the probe, played
+wait_played 8
+wait_ended          # the folder's end: the list
+sleep 2
 press LB            # a page up (twice: the list is longer than a page now): the top, a_dir
 press LB
 press A             # into a_dir
 sleep 0.5
 press A             # inner.mkv (25 frames/s: 50 Hz)
-wait_played 4
+wait_played 9
 wait_stc 1
 press RIGHT         # +30 s: one seek, after the settle
-wait_played 5
+wait_played 10
 sleep 1.5
 press BACK+START    # the list
 sleep 0.5
@@ -239,6 +265,8 @@ done
 red_fail=0
 summary=()
 for name in $(python3 "$here/mutations.py" list); do
+  # PL_RED_ONLY="NAME ..." : those mutations alone
+  [ -n "${PL_RED_ONLY:-}" ] && [[ " $PL_RED_ONLY " != *" $name "* ]] && continue
   label=$(python3 "$here/mutations.py" label "$name")
   m=$work/red_$name
   rm -rf "$m"; mkdir -p "$m"; cp -r "$src" "$m/src"; cp -r "$common" "$m/common"

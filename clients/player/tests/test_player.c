@@ -20,7 +20,9 @@
  *                          (the same): A B X Y LB RB UP DOWN LEFT RIGHT START BACK
  *       wait_played N      until N sessions have consumed at least one record
  *       wait_stc S         until the current session's clock is S seconds past its anchor
- *       wait_ended         until the current session's stream ended (LIVE ENDED)
+ *       wait_ended         until the current session's stream ended (LIVE ENDED), or one ended since
+ *                          the wait began (a folder's end opens a new session the moment the last
+ *                          file's ENDED is read: a 2 ms poll can miss so short an ENDED)
  *       end                the script is done: the player must now end by itself
  *     Every wait has a timeout (20 s) that is logged and moves on, so a mutant still finishes.
  * Written to OUT/ for check_player.py (times are CLOCK_REALTIME):
@@ -111,6 +113,7 @@ static int nsess;
 
 static struct {
     int booted, sess, stop, run, paused, eos, ended, bad_header, bad_seen;
+    unsigned n_ended;                 /* sessions whose stream ended (wait_ended's latch) */
     int vrec, pic_mode;                 /* (0.15) a video record this session; its first was a PICTURE */
     uint32_t seen, rw, seq, ack, w34;
     uint64_t anchor_pts, run_us, last_us, stc;
@@ -405,7 +408,10 @@ static void core_step(void)
         shown = dq[dq_h % 64].store;
         dq_h++;
     }
-    if (core.eos && core.run && core.max_pts >= 0 && core.stc >= (uint64_t)core.max_pts) core.ended = 1;
+    if (core.eos && core.run && core.max_pts >= 0 && core.stc >= (uint64_t)core.max_pts && !core.ended) {
+        core.ended = 1;
+        core.n_ended++;
+    }
     uint32_t glo = lo(H264RING_W_OVL_GEN_LO), ghi = lo(H264RING_W_OVL_GEN_HI);
     if (glo == ghi && glo != core.ovl_gen) {
         uint32_t c = lo(H264RING_W_OVL_CTL), base = lo(H264RING_W_OVL_BASE), size = lo(H264RING_W_OVL_SIZE);
@@ -595,10 +601,13 @@ int main(int argc, char **argv)
             }
         } else if (!strcmp(cmd, "wait_played") || !strcmp(cmd, "wait_stc") || !strcmp(cmd, "wait_ended")) {
             double v = atof(arg);
+            pthread_mutex_lock(&core_mx);
+            unsigned ended0 = core.n_ended;
+            pthread_mutex_unlock(&core_mx);
             for (;;) {
                 pthread_mutex_lock(&core_mx);
                 int ok = !strcmp(cmd, "wait_played") ? played_sessions() >= (int)v
-                       : !strcmp(cmd, "wait_ended") ? core.ended
+                       : !strcmp(cmd, "wait_ended") ? core.ended || core.n_ended != ended0
                        : core.run && (double)((core.stc - core.anchor_pts) & ((1ull << 33) - 1u)) >= v * 90000.0;
                 pthread_mutex_unlock(&core_mx);
                 if (ok) break;

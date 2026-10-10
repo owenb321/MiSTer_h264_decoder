@@ -3,7 +3,7 @@
 """fake_server.py -- a scripted Jellyfin 10.11 for the client's host test (Python stdlib only).
 
   fake_server.py --dir TESTDIR --media MEDIA --log LOG.json --portfile FILE
-                 [--runtime-a S] [--runtime-b S]
+                 [--runtime-a S] [--runtime-b S] [--runtime-c S] [--runtime-d S]
 
 HTTP on 127.0.0.1 (a free port, written to --portfile) and a hand-written WebSocket on /socket.
 The endpoints are the ones src/jf.c calls, answered as the server's source does
@@ -16,7 +16,9 @@ MEDIA holds A.mkv (direct play, its A.srt as an External subtitle stream), C.mkv
 audio: the pad's item), B.mkv (CAVLC: the
 server offers it for direct play -- it cannot see CABAC -- and the client must refuse it) and
 hls/main.m3u8 + segments (B's transcode, offered when a PlaybackInfo has EnableDirectPlay false
-and AllowVideoStreamCopy false).
+and AllowVideoStreamCopy false), and hlsD/ (item D: a 1080p HEVC source, offered only as a
+transcode -- one TS segment whose audio comes first after 3 s of video, then 6.5 s ahead of it:
+the server's muxer of 2026-10-09, docs/jellyfin.md S12).
 
 The scenario (a thread; every wait on a condition, with a timeout that ends the run): sign-in
 by Quick Connect -> capabilities -> the socket; ForceKeepAlive (a KeepAlive expected within
@@ -28,7 +30,8 @@ pad's RIGHT three times; the seek's open slow) -> the seek's Progress -> 1.5 s -
 held 1.2 s; the open slow again) ->
 the seek's Progress -> 1 s -> Stop; Play B -> PlaybackInfo again with direct play off
 -> the transcode -> 2 s -> Seek to 4 s (the transcode's segment URLs carry runtimeTicks, so the
-client opens the playlist from the segment holding 4 s) -> 2 s -> SetVolume 100 -> played to its end (the Stopped report). Then TESTDIR/stop (test_client stops
+client opens the playlist from the segment holding 4 s) -> 2 s -> SetVolume 100 -> played to its end (the Stopped report);
+Play D -> its transcode played to its end (the Stopped report). Then TESTDIR/stop (test_client stops
 the client), and once TESTDIR/client_done appears (run_test.sh) the log: every request (its
 Authorization header, its body), the reports with their times, the socket's messages both
 ways, the scenario's times and timeouts.
@@ -50,6 +53,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ITEM_A = "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
 ITEM_B = "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0"
 ITEM_C = "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+ITEM_D = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+HLS_DIR = {ITEM_B: "hls", ITEM_D: "hlsD"}
 USER_ID = "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
 SERVER_ID = "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
 TOKEN = secrets.token_hex(16)
@@ -311,10 +316,10 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r"^/Items/([0-9a-f]{32})$", path)
         if m and method == "GET":
             item = m.group(1)
-            if item not in (ITEM_A, ITEM_B, ITEM_C):
+            if item not in (ITEM_A, ITEM_B, ITEM_C, ITEM_D):
                 return self.reply(404)
             name, rt = {ITEM_A: ("Item A", args.runtime_a), ITEM_B: ("Item B", args.runtime_b),
-                        ITEM_C: ("Item C", args.runtime_c)}[item]
+                        ITEM_C: ("Item C", args.runtime_c), ITEM_D: ("Item D", args.runtime_d)}[item]
             return self.reply(200, {"Id": item, "Name": name, "Type": "Movie", "RunTimeTicks": int(rt * TICKS),
                                     "MediaType": "Video"})
         m = re.match(r"^/Items/([0-9a-f]{32})/PlaybackInfo$", path)
@@ -351,30 +356,32 @@ class H(BaseHTTPRequestHandler):
             if ticks:                                      # as Jellyfin's FilterEvents: earlier cues dropped, the rest shifted
                 text = rebase_srt(text, ticks / TICKS)
             return self.reply(200, raw=text.encode(), ctype="application/x-subrip")
-        if lp == "/videos/%s/master.m3u8" % ITEM_B and method == "GET":
-            event("hls_master")
+        m = re.match(r"^/videos/(%s|%s)/master\.m3u8$" % (ITEM_B, ITEM_D), lp)
+        if m and method == "GET":
+            event("hls_master", item=m.group(1))
             text = ("#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=2500000,CODECS=\"avc1.640028,mp4a.40.2\","
-                    "RESOLUTION=640x360\nmain.m3u8?ApiKey=%s&PlaySessionId=psB\n" % TOKEN)
+                    "RESOLUTION=640x360\nmain.m3u8?ApiKey=%s&PlaySessionId=ps%s\n" % (TOKEN, m.group(1)[:1].upper()))
             return self.reply(200, raw=text.encode(), ctype="application/vnd.apple.mpegurl")
-        if lp == "/videos/%s/main.m3u8" % ITEM_B and method == "GET":
+        m = re.match(r"^/videos/(%s|%s)/main\.m3u8$" % (ITEM_B, ITEM_D), lp)
+        if m and method == "GET":
             # each segment's URL carries its start and length in the item's ticks, as Jellyfin's do
             # (hls1/main/N.ts?...&runtimeTicks=N&actualSegmentLengthTicks=M): the client trims the
             # playlist to the segment holding its start
             out, t = [], 0
-            for ln in open(os.path.join(args.media, "hls", "main.m3u8")).read().splitlines():
+            for ln in open(os.path.join(args.media, HLS_DIR[m.group(1)], "main.m3u8")).read().splitlines():
                 if ln.startswith("#EXTINF:"):
                     dur = float(ln[8:].split(",")[0])
-                elif re.match(r"^seg\d+\.ts$", ln):
+                elif re.match(r"^d?seg\d+\.ts$", ln):
                     ln = "%s?ApiKey=%s&runtimeTicks=%d&actualSegmentLengthTicks=%d" % (
                         ln, TOKEN, round(t * TICKS), round(dur * TICKS))
                     t += dur
                 out.append(ln)
             text = "\n".join(out) + "\n"
             return self.reply(200, raw=text.encode(), ctype="application/vnd.apple.mpegurl")
-        m = re.match(r"^/videos/%s/(seg\d+\.ts)$" % ITEM_B, lp)
+        m = re.match(r"^/videos/(%s|%s)/(d?seg\d+\.ts)$" % (ITEM_B, ITEM_D), lp)
         if m and method == "GET":
-            event("hls_segment", name=m.group(1))
-            return self.send_file(os.path.join(args.media, "hls", m.group(1)), "video/mp2t")
+            event("hls_segment", item=m.group(1), name=m.group(2))
+            return self.send_file(os.path.join(args.media, HLS_DIR[m.group(1)], m.group(2)), "video/mp2t")
         rep = {"/Sessions/Playing": "Playing", "/Sessions/Playing/Progress": "Progress",
                "/Sessions/Playing/Stopped": "Stopped"}.get(path)
         if rep and method == "POST":
@@ -385,7 +392,7 @@ class H(BaseHTTPRequestHandler):
         return self.reply(404)
 
     def playback_info(self, item, body):
-        if item not in (ITEM_A, ITEM_B, ITEM_C):
+        if item not in (ITEM_A, ITEM_B, ITEM_C, ITEM_D):
             return self.reply(404)
         body = body if isinstance(body, dict) else {}
         with lock:
@@ -401,7 +408,18 @@ class H(BaseHTTPRequestHandler):
         ms = {"Id": item, "Protocol": "File", "Container": "mkv", "SupportsDirectPlay": True,
               "SupportsDirectStream": True, "SupportsTranscoding": True, "DefaultAudioStreamIndex": 1,
               "MediaStreams": [video, audio]}
-        if item == ITEM_C:                                 # one colour, no audio
+        if item == ITEM_D:                                 # a source only a transcode can carry (the maintainer's film)
+            ms["RunTimeTicks"] = int(args.runtime_d * TICKS)
+            ms["MediaStreams"] = [dict(video, Codec="hevc", Width=1920, Height=1080, Profile="Main 10", BitDepth=10,
+                                       DisplayTitle="1080p HEVC SDR"),
+                                  dict(audio, Codec="eac3", Channels=6, DisplayTitle="E-AC-3 - 5.1")]
+            ms["SupportsDirectPlay"] = ms["SupportsDirectStream"] = False
+            ms["TranscodingUrl"] = ("/videos/%s/master.m3u8?DeviceId=x&MediaSourceId=%s&VideoCodec=h264"
+                                    "&AudioCodec=aac&MaxWidth=854&MaxHeight=480&PlaySessionId=psD&ApiKey=%s"
+                                    % (ITEM_D, ITEM_D, TOKEN))
+            ms["TranscodingSubProtocol"] = "hls"
+            ms["TranscodingContainer"] = "ts"
+        elif item == ITEM_C:                               # one colour, no audio
             ms["RunTimeTicks"] = int(args.runtime_c * TICKS)
             ms["MediaStreams"] = [dict(video, Width=320, Height=180)]
             ms.pop("DefaultAudioStreamIndex")
@@ -615,6 +633,15 @@ def scenario(times):
                       if r["t"] > reports("Playing", ITEM_B, times["play_b"])[0]["t"]],
              2 * args.runtime_b + 20, "item B's Stopped report at its end")
     times["end_b"] = now()
+    time.sleep(0.5)
+    # item D: the transcode whose audio the probe missed and which then runs seconds ahead of its video
+    times["play_d"] = send("Play", {"ItemIds": [ITEM_D], "StartPositionTicks": 0, "PlayCommand": "PlayNow",
+                                    "ControllingUserId": USER_ID})
+    wait_for(lambda: reports("Playing", ITEM_D, times["play_d"]), 20, "item D's Playing report")
+    wait_for(lambda: [r for r in reports("Stopped", ITEM_D, times["play_d"])
+                      if r["t"] > reports("Playing", ITEM_D, times["play_d"])[0]["t"]],
+             2 * args.runtime_d + 20, "item D's Stopped report at its end")
+    times["end_d"] = now()
 
 
 def main():
@@ -627,6 +654,7 @@ def main():
     ap.add_argument("--runtime-a", type=float, default=12.0)
     ap.add_argument("--runtime-b", type=float, default=8.0)
     ap.add_argument("--runtime-c", type=float, default=300.0)
+    ap.add_argument("--runtime-d", type=float, default=10.0)
     args = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     srv.daemon_threads = True
@@ -649,8 +677,9 @@ def main():
         time.sleep(0.05)
     time.sleep(0.2)
     with lock:
-        log = dict(st, times=times, token=TOKEN, items={"A": ITEM_A, "B": ITEM_B, "C": ITEM_C}, user=USER_ID,
-                   qc_secret=QC_SECRET, runtime={"A": args.runtime_a, "B": args.runtime_b, "C": args.runtime_c})
+        log = dict(st, times=times, token=TOKEN, items={"A": ITEM_A, "B": ITEM_B, "C": ITEM_C, "D": ITEM_D}, user=USER_ID,
+                   qc_secret=QC_SECRET, runtime={"A": args.runtime_a, "B": args.runtime_b, "C": args.runtime_c,
+                                                 "D": args.runtime_d})
         json.dump(log, open(args.log, "w"), indent=1, default=str)
     srv.shutdown()
     print("fake_server: scenario %s" % ("completed" if times["completed"] else "ABORTED: " + times["aborted"]))
