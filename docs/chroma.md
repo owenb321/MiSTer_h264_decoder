@@ -142,6 +142,9 @@ siting never changes inside a refresh). No interface change (status word: §6).
   `--red` N1-N11 each caught by its own arm. The fixture picture's ramp band now differs row to row:
   with identical rows the Blend kernel's first-row mirror (K5) had been visible only through the
   retired chroma kernel. `run_vid_equiv.sh` ALL GREEN with neutral chroma (bit-exact against main).
+- **The fit** (SEED 2, `H264_chromafull_20261010_1752.rbf`) and **.201** at Native, Progressive and 480i: the
+  core's raster matches the golden's bilinear render at 99.99-100 % (max 2), the old nearest rule at 66-76 %
+  (`history.md` §44).
 - **The golden's independent checks** (`tools/disp_golden.py`): the worked positions (§2's table), ffmpeg
   at all six sitings after an impulse per siting, the field split against ffmpeg's, a triangle ramp at
   three sitings on every fitted case (222 checks, worst bias 0.07 codes; a quarter-sample error is 2.0);

@@ -324,8 +324,9 @@ plays as on main's build (control arm equal), 0.17 <-> 1.0 refused both ways (`d
 `feature/chroma-interp`**: the maintainer's bands beside red in Native (HDMI) were the reader's NEAREST chroma. First an
 identity-only fix (fit SEED 5, verified on .201: `docs/history.md` §43), then **the full version** (decided 2026-10-10,
 `docs/chroma.md`): the SPS's `chroma_sample_loc_type` carried to the display, chroma rows in their own 8 slots, bilinear
-chroma at the siting on every output (fields within their field); benches GREEN / `--red`; ⏳ the fit, .201, the maintainer's
-look. Parked (the session memory, not yet in docs/): the Jellyfin freeze and no-audio fixes. 91 % ALM, 9 DSP left.
+chroma at the siting on every output (fields within their field); benches GREEN / `--red`; fit SEED 2 102.15 / 102.45 PASS
+(`H264_chromafull_20261010_1752.rbf`, 93 % ALM, 3 DSP left); on .201 every output matches the golden 99.99-100 %
+(`docs/history.md` §44); ⏳ the maintainer's look, then the merge. Parked (the session memory, not yet in docs/): the Jellyfin freeze and no-audio fixes. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

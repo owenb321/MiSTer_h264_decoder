@@ -455,7 +455,7 @@ def lerp(a, b, w):
     return (a * (256 - w) + b * w + 128) >> 8
 
 
-def render(Y, Cb, Cr, f, luma=None, sit=(0, 0)):
+def render(Y, Cb, Cr, f, luma=None, sit=(0, 0), code=1):
     """the raster (RH x RW x 3) and its de mask for a picture fitted by f (luma: a dict that
     receives each shown line's luma -- and 'U' / 'V', the chroma -- for the independent checks below).
     The pre-filters (§11b; anti-twitter's sliding rows among them): luma only. Chroma (docs/chroma.md):
@@ -475,7 +475,7 @@ def render(Y, Cb, Cr, f, luma=None, sit=(0, 0)):
         ky0, ky1, wy = int(ky0[0]), int(ky1[0]), int(wy[0])
         y = lerp(lerp(Yd[ky0, kx0], Yd[ky0, kx1], wx), lerp(Yd[ky1, kx0], Yd[ky1, kx1], wx), wy)
         u, v = chroma_line(Ud, Vd, f, L, xs, sit)[:2]
-        img[L, x0:x1] = rgb(y, u, v)
+        img[L, x0:x1] = rgb(y, u, v, code)
         if luma is not None:
             luma[L] = y
             luma.setdefault('U', {})[L] = u

@@ -955,7 +955,9 @@ the identity").
       8 slots (each fetched once); bilinear chroma at the siting on EVERY output -- Interlaced, Progressive,
       Native, scaled or not; a field store within its own field. The identity step is its special case.
       Benches GREEN / `--red` (`chroma.md` §6).
-- [ ] The fit, the red pattern on .201 (Native, Progressive scaled, 480i), the maintainer's look, the merge.
+- [x] Fit SEED 2 102.15 / 102.45, clk_vid 96.94 / 91.46 PASS; on .201 at Native, Progressive (scaled, Area) and
+      480i the raster matches the golden 99.99-100 % (`history.md` §44).
+- [ ] The maintainer's look on real content, then the merge.
 - Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
   chroma under the Area pre-filter.
 
