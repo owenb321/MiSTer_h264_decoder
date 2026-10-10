@@ -1,6 +1,6 @@
 # Chroma reconstruction: siting-aware bilinear on every output (roadmap Phase 6e)
 
-Status: **built, 2026-10-10** on `feature/chroma-interp` -- decided with the maintainer ("let's do the full
+Status: **✅ MERGED (PR #8), ✅ HW-CONFIRMED 2026-10-10** (`feature/chroma-interp`) -- decided with the maintainer ("let's do the full
 version"). It REPLACES the identity-only step (`display.md` §3 "Chroma at the identity"): that step's
 results are this design's special case, and the identity frame came out the same 345,600 dots. Stage 1
 (the siting plumbing) `7cbaa9e`, stage 2 (the reader) `d9220af`; the benches and the fit: §6.

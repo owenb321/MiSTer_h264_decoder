@@ -934,7 +934,7 @@ great in Native, much worse in Progressive (`analog.md` §11). Found: the host's
 - [x] ✅ MERGED (PR fj#32, 2026-10-05).
 - Not changed (the maintainer, 2026-10-04): ascal's own filter when Main loads none (nearest).
 
-## Phase 6e — Chroma reconstruction: siting-aware bilinear on every output (asked 2026-10-09, the maintainer) -- 🔧 `feature/chroma-interp`, ✅ HW-CONFIRMED 2026-10-10 (the maintainer on .201), ⏳ the merge
+## Phase 6e — Chroma reconstruction: siting-aware bilinear on every output (asked 2026-10-09, the maintainer) -- ✅ MERGED (PR #8), ✅ HW-CONFIRMED 2026-10-10 (the maintainer on .201)
 
 The report, testing 1.0.0 in Native (HDMI): vertical bands beside red detail (the Netflix logo, a red
 suit's webbing). Measured on .201: the reader showed chroma NEAREST (99.99 % of a test pattern), each
@@ -958,7 +958,7 @@ the identity").
 - [x] Fit SEED 2 102.15 / 102.45, clk_vid 96.94 / 91.46 PASS; on .201 at Native, Progressive (scaled, Area) and
       480i the raster matches the golden 99.99-100 % (`history.md` §44).
 - [x] The maintainer's look on real content (.201, 2026-10-10): "this looks better".
-- [ ] The merge.
+- [x] Merged (PR #8).
 - Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
   chroma under the Area pre-filter.
 
