@@ -1485,5 +1485,7 @@ nearest rule:
 | Progressive (480p) | 720x480, Area | 99.99 % exact, max 2 | 72.2 %, max 144 |
 | Interlaced (480i) | 720x360 letterboxed, Area | 100.00 % exact, max 2 | 65.9 %, max 146 |
 
-90 / 90 pictures each, errors 0, `disp_fetch_late` 0. Restored.
+90 / 90 pictures each, errors 0, `disp_fetch_late` 0. Restored. Then installed on .201 as
+`_Other/H264_20261010.rbf` (beside 1.0.0's `H264_20261009.rbf`; the programs load the newest) for the
+maintainer's own round on real content: **"this looks better"** (2026-10-10).
 
