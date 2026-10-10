@@ -44,6 +44,7 @@ The client's log is `/media/fat/jellyfin/jellyfin.log`
 | "This item cannot play" | The server's own conversion produced something the core does not decode (the message names it). Check the server's transcoding settings: H.264 encoding must not use x264's `ultrafast` preset. |
 | "Playback failed" | The log names the error. A film the server cannot convert (its transcoding disabled for your account) fails this way. |
 | A film stutters or falls behind | The server's conversion is not keeping up: its dashboard shows the transcode's speed. |
+| Faint blocky lines across the picture during fades and dark scenes, on a film the server converts | Artifacts of the server's conversion (common with HEVC or HDR films): dark fades are hard to encode, and the MiSTer shows what it receives. In the server's dashboard (**Playback** → **Transcoding**), choose a slower encoder preset or a higher quality for hardware encoding, and turn on tone mapping for HDR films. A film already in H.264 at 1280x720 or less is played as it is, with no conversion ([What plays](../using/jellyfin.md#what-plays)). |
 
 ## Video files
 
