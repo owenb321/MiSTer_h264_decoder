@@ -355,13 +355,23 @@ module disp_reader #(
     wire         c_below = c_kw < $signed({16'd0, cymin});
     logic [2:0]  cal_pick;
     logic        cal_ok;
+    // (in parallel, not luma's running minimum: over eight slots that loop chained eight compares -- clk_vid's
+    // worst path in the first fit, 62.5 MHz. A candidate is the victim when no other candidate holds a lower
+    // row; one level of terms, then the lowest index)
+    wire  [7:0]  ccand = ~cprot & ~cal_skip;
+    wire  [7:0]  cinv  = ccand & ~ctag_v;
+    logic [7:0]  cmin_v;
     always_comb begin
-        cal_ok = 1'b0; cal_pick = 3'd0;
-        for (int i = 7; i >= 0; i--)
-            if (!cprot[i] && !cal_skip[i] && !ctag_v[i]) begin cal_ok = 1'b1; cal_pick = i[2:0]; end
-        if (!cal_ok)
-            for (int i = 7; i >= 0; i--)
-                if (!cprot[i] && !cal_skip[i] && (!cal_ok || clt[i][cal_pick])) begin cal_ok = 1'b1; cal_pick = i[2:0]; end
+        for (int i = 0; i < 8; i++) begin
+            cmin_v[i] = ccand[i];
+            for (int j = 0; j < 8; j++)
+                if (j != i && ccand[j] && clt[j][i]) cmin_v[i] = 1'b0;
+        end
+    end
+    wire  [7:0]  cpool = (cinv != 8'd0) ? cinv : cmin_v;
+    always_comb begin
+        cal_ok = (ccand != 8'd0); cal_pick = 3'd0;
+        for (int i = 7; i >= 0; i--) if (cpool[i]) cal_pick = i[2:0];
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
