@@ -1,8 +1,9 @@
 # Chroma reconstruction: siting-aware bilinear on every output (roadmap Phase 6e)
 
-Status: **design, 2026-10-10** -- decided with the maintainer ("let's do the full version"); built on
-`feature/chroma-interp` after the identity-only step (`display.md` §3 "Chroma at the identity", which
-this design REPLACES: its results are this design's special case, bit for bit).
+Status: **built, 2026-10-10** on `feature/chroma-interp` -- decided with the maintainer ("let's do the full
+version"). It REPLACES the identity-only step (`display.md` §3 "Chroma at the identity"): that step's
+results are this design's special case, and the identity frame came out the same 345,600 dots. Stage 1
+(the siting plumbing) `7cbaa9e`, stage 2 (the reader) `d9220af`; the benches and the fit: §6.
 
 ## 1. Why
 
@@ -130,7 +131,23 @@ siting never changes inside a refresh). No interface change (status word: §6).
 - The siting plumbing: `run_recon_top.sh` (a stream with each `chroma_sample_loc_type`), the cosim.
 - On .201: the red pattern (and a ramp) at Native, at Progressive scaled, and at 480i against the golden.
 
-## 6. Open points
+## 6. As built
+
+- **Stage 1** (`7cbaa9e`): `recon_hdr`'s `col_ram` 26 -> 32 bits; `pinfo_siting` through `pic_in` (a
+  PICTURE: 0), `recon_out` (238 bits), `disp_ctl`, emu's bundle (+6), `disp_reader.pic_siting`. Benches:
+  `run_scaffold`, `run_recon_out`, `run_ring_rd`, `run_recon_top` ALL GREEN (three siting clips scored
+  against ffprobe's `chroma_location`: 09, 12, 2d; every colour clip's 00); CL13-CL15.
+- **Stage 2** (`d9220af`): as §3. `run_disp_reader.sh` GREEN 70 arms (the identity at every siting, a
+  field pair with differing sitings, Bob / Blend, 480i, every fitted, Area and native case, `[late]`);
+  `--red` N1-N11 each caught by its own arm. The fixture picture's ramp band now differs row to row:
+  with identical rows the Blend kernel's first-row mirror (K5) had been visible only through the
+  retired chroma kernel. `run_vid_equiv.sh` ALL GREEN with neutral chroma (bit-exact against main).
+- **The golden's independent checks** (`tools/disp_golden.py`): the worked positions (§2's table), ffmpeg
+  at all six sitings after an impulse per siting, the field split against ffmpeg's, a triangle ramp at
+  three sitings on every fitted case (222 checks, worst bias 0.07 codes; a quarter-sample error is 2.0);
+  each proven able to fail by a planted wrong offset.
+
+## 7. Open points
 
 - **Telemetry:** a malformed `chroma_sample_loc_type` (past 5) is taken as 0; it and the shown
   picture's siting become visible in the 1.x minor that adds the PICTURE record's siting (B) -- a count

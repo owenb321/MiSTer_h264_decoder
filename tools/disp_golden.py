@@ -59,7 +59,10 @@ HAVE_FFMPEG = shutil.which("ffmpeg") is not None
 def picture(seed, W, H):
     rng = np.random.default_rng(seed)
     Y = rng.integers(0, 256, (H, W))
-    Y[:40] = np.arange(W) % 256                   # a ramp band: every level of the clip
+    # a ramp band: every level of the clip -- each row shifted 7 levels, so no two adjacent rows are equal (the
+    # Blend kernel's first-row mirror is visible in luma: with identical rows K5 was seen only through the
+    # chroma kernel, retired by docs/chroma.md)
+    Y[:40] = (np.arange(W)[None, :] + 7 * np.arange(40)[:, None]) % 256
     Cb = rng.integers(0, 256, (H // 2, W // 2))
     Cr = rng.integers(0, 256, (H // 2, W // 2))
     return Y, Cb, Cr

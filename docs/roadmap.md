@@ -934,7 +934,7 @@ great in Native, much worse in Progressive (`analog.md` §11). Found: the host's
 - [x] ✅ MERGED (PR fj#32, 2026-10-05).
 - Not changed (the maintainer, 2026-10-04): ascal's own filter when Main loads none (nearest).
 
-## Phase 6e — Chroma at the identity (asked 2026-10-09, the maintainer) -- 🔧 `feature/chroma-interp`, ⏳ the maintainer's look
+## Phase 6e — Chroma reconstruction: siting-aware bilinear on every output (asked 2026-10-09, the maintainer) -- 🔧 `feature/chroma-interp`, ⏳ fit, rig, the maintainer's look
 
 The report, testing 1.0.0 in Native (HDMI): vertical bands beside red detail (the Netflix logo, a red
 suit's webbing). Measured on .201: the reader showed chroma NEAREST (99.99 % of a test pattern), each
@@ -950,9 +950,14 @@ the identity").
       the second tap), then SEED 5 103.33 / 104.01, clk_vid 96.31 / 95.39 PASS
       (`H264_chromasweep_20261010_0632.rbf`); on .201 the pattern at Native matches the RTL's integers
       on 99.99 % of pixels, ffmpeg's upsampling within 3 codes (was 76 % / 107: `history.md` §43).
-- [ ] The maintainer's look on real content (the Netflix logo), then the merge.
-- Later, if wanted: the VUI's `chroma_sample_loc_type`; interpolation on the scaled outputs (variable
-  weights: multipliers or a second chroma read per tap).
+- [x] **The full version** (2026-10-10, "let's do the full version"; `docs/chroma.md`): the stream's
+      `chroma_sample_loc_type` (all six types) carried from the SPS to the display; chroma rows in their own
+      8 slots (each fetched once); bilinear chroma at the siting on EVERY output -- Interlaced, Progressive,
+      Native, scaled or not; a field store within its own field. The identity step is its special case.
+      Benches GREEN / `--red` (`chroma.md` §6).
+- [ ] The fit, the red pattern on .201 (Native, Progressive scaled, 480i), the maintainer's look, the merge.
+- Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
+  chroma under the Area pre-filter.
 
 ## Phase 7 — For integrators
 

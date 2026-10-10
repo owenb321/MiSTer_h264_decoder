@@ -77,7 +77,9 @@ golden bit for bit; the kernels below apply there only. `fetch_late` counts a li
 rows were not in when it began. The paragraphs below describe the P5 reader; the fetch
 rule and LAT are superseded as stated here.
 
-**Chroma at the identity (feature/chroma-interp, 2026-10-09).** The maintainer, testing 1.0.0 in
+**Chroma at the identity (feature/chroma-interp, 2026-10-09) -- SUPERSEDED the next day by `docs/chroma.md`**
+(siting-aware bilinear on every output; this step's integers are its special case, kept below as the
+record of the measurement and the first decisions). The maintainer, testing 1.0.0 in
 Native (HDMI): "details around red colors show noticeable vertical bands around them" (the Netflix
 logo, a red suit's webbing). Measured on .201 with a synthetic 1280x720 pattern (red, blue and green
 details, 1- and 2-pixel lines, edges at every column offset) at Native: the core's raster matched a
