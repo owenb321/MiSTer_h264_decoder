@@ -359,6 +359,11 @@
 #     --release --compile with SEED 12 pinned reproduced 103.15/102.38, clk_vid 93.62/94.43 PASS; ungated: clk_sys ->
 #     clk_vid analog_want_l / status[6] -> ary[7] -0.206 / -0.086 at 100 C (quasi-static settings flags; seed placement);
 #     H264_20261009.rbf, smoke-tested on .201 (docs/history.md S42).
+#   2026-10-10 (feature/chroma-interp 8be5f1e: chroma interpolated at the identity fit, docs/display.md "Chroma at
+#     the identity"; CORE_VERSION dev-chroma): SEED 12 first roll 94.17/95.05 MARGINAL, clk_vid 81.61/82.52 FAIL (gate 86)
+#     -- clk_vid's worst paths the new ahead index ((x_k0 + 1) >> 1 vs kmax >> 1) into the chroma RAMs' address;
+#     replaced by the second tap (x_k1 >> 1), same index; ALM 37,980 (91 %), RAM 413, DSP 103,
+#     H264_chroma_MARGINAL_20261010_0524.rbf.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
