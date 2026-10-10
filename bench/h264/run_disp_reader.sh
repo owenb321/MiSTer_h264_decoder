@@ -132,7 +132,9 @@
 #   Z4  disp: the vertical blend on a store of fields                -> [field]
 #   Z5  disp: the ahead read not clamped to the crop's last sample   -> [rgb] (the right edge)
 #   Z6  disp: no interpolation at the identity (nearest)             -> [rgb]
-#   Z7  disp: interpolation off the identity (480i)                  -> [il]
+#   Z7  disp: interpolation off the identity                         -> [fit] p640 (a scaled progressive
+#       picture: the previous dot holds another sample. At 480i the mutant is EQUIVALENT -- a pixel is
+#       two dots, so the previous dot read the same chroma sample and the blend averages it with itself)
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim
@@ -330,7 +332,7 @@ PYEOF
   mut Z4 $D "s0_vi <= ident && !pic_field;" "s0_vi <= ident;" $DT "field" "$O" "+arm=field +field +want=$G/disp_want_field.hex" & throttle
   mut Z5 $D "(c_up > c_lm) ? c_lm[10:0] : c_up[10:0];" "c_up[10:0];" $DT "rgb" "$O" & throttle
   mut Z6 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b0; s0_vi" $DT "rgb" "$O" & throttle
-  mut Z7 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b1; s0_vi" $DT "il" "$O" "+arm=il +il +want=$G/disp_want_frame_il.hex" & throttle
+  mut Z7 $D "s0_hi <= ident; s0_vi" "s0_hi <= 1'b1; s0_vi" $DT "fit" "$O" "$(fit_args p640)" & throttle
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"
