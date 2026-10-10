@@ -22,6 +22,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "tools"))
 import ring_model as M  # noqa: E402
+import ts_skew  # noqa: E402
 
 RING = 1 << 20                     # test_player.c's RING
 M32 = 0xFFFFFFFF
@@ -209,7 +210,7 @@ def main():
     log = open(logf, errors="replace").read().splitlines()
     fx = json.load(open(os.path.join(media, "fixtures.json")))
     ref = {}
-    for n in ("inner", "b_pal", "c_ok"):
+    for n in ("inner", "b_pal", "c_ok", "l_ahead", "m_late"):
         fm = framemd5(os.path.join(media, n + ".framemd5"))
         aus, ok = split_ref(os.path.join(media, n + ".h264"), fm)
         ref[n] = {"fm": fm, "aus": aus, "ok": ok, "md5": set(p["md5"] for p in fm)}
@@ -390,28 +391,28 @@ def main():
     check("(p3) i_mjpeg (4:2:2 full range): every picture 4:2:0, its full range kept and tagged BT.601 full (0.16)",
           ok3, why3)
 
-    check("(f) a folder entered: the seventh file played is a_dir/inner.mkv",
-          len(played) >= 7 and names[6] == "inner", "played %s" % names)
+    check("(f) a folder entered: the ninth file played is a_dir/inner.mkv",
+          len(played) >= 9 and names[8] == "inner", "played %s" % names)
 
     # (g) the seek: RIGHT once -> one new session of inner, its first AU an IDR (SPS / PPS) at the
     # position then + 30 s (at or before it, within a GOP: 1 s)
     right = [c for c in script if c["cmd"].startswith("press RIGHT")]
     okg, whyg = False, "no RIGHT press / no fourth session"
-    if right and len(played) >= 8 and names[7] == "inner":
-        k3 = played[6]["k"]
+    if right and len(played) >= 10 and names[9] == "inner":
+        k3 = played[8]["k"]
         t = right[0]["t0"]
         before = [x for x in stc if x[0] <= t and x[1] == k3 and x[2]]
         if before:
             pos = before[-1][5] / 90000.0 - fx["inner_start"]
-            v = vids(played[7]["rec"])
+            v = vids(played[9]["rec"])
             first = v[0]["pts"] / 90000.0 - fx["inner_start"] if v and v[0]["pts"] is not None else -1
             target = pos + 30
             idr = v and {5, 7, 8} <= nal_types(v[0]["data"])
             # by MD5 AND PTS: one colour's IDRs are byte-identical
             idx = next((i for i, p in enumerate(ref["inner"]["fm"])
                         if md5(v[0]["data"]) == p["md5"] and v[0]["pts"] == p["pts90"]), None)
-            ok_from = idx is not None and exact(played[7], "inner", idx)[0]
-            okg = bool(idr) and target - 1.05 <= first <= target + 0.05 and ok_from and len(played) == 8
+            ok_from = idx is not None and exact(played[9], "inner", idx)[0]
+            okg = bool(idr) and target - 1.05 <= first <= target + 0.05 and ok_from and len(played) == 10
             whyg = "position %.2f -> first AU at %.2f (target %.2f), IDR %s, AUs as the file's %s, played %d" % (
                 pos, first, target, bool(idr), ok_from, len(played))
     check("(g) the seek: RIGHT -> one new session, an IDR at the position + 30 s (within a GOP)", okg, whyg)
@@ -421,9 +422,9 @@ def main():
         return [x for x in settings if a <= x[0] <= b and x[3] == val]
     t_b = played[0]["t_start"] if played else 0
     t_c = played[1]["t_start"] if len(played) >= 2 else 0
-    t_i = played[6]["t_start"] if len(played) >= 7 else 0
+    t_i = played[8]["t_start"] if len(played) >= 9 else 0
     t_c_end = played[1]["t_start"] if len(played) >= 2 else 0
-    r1 = bool(played) and len(played) >= 7 and req_between(0, t_b, 3) and req_between(t_c_end, t_i, 3)
+    r1 = bool(played) and len(played) >= 9 and req_between(0, t_b, 3) and req_between(t_c_end, t_i, 3)
     check("(r1) Refresh Rate 50 Hz asked for before each 25 frames/s file starts (b_pal, inner)", bool(r1),
           "requests %s" % [(round(x[0] - (ss[0]["t_start"] if ss else 0), 2), x[3]) for x in settings])
 
@@ -496,8 +497,73 @@ def main():
     check("(w) slow writes (the A9's CAVLC rewrite): the player's loop never stalls over 0.25 s (the pad read)",
           gaps is not None and not stalls, "stalls (at, s) %s" % stalls[:6])
 
+    # (x) / (y) the interleaves of 2026-10-09's transcode (docs/jellyfin.md S12), in files: the seventh and
+    # eighth sessions
+    sl = played[6] if len(played) >= 7 and names[6] == "l_ahead" else None
+    lead_f, _ = ts_skew.skew(os.path.join(media, "l_ahead.packets"))
+    okx, whyx = False, "fixture: audio %.2f s ahead; l_ahead not the seventh played (%s)" % (lead_f, names[6:7])
+    if sl is not None:
+        vmax, worst, n_a = None, None, 0
+        for r in sl["rec"]:
+            if r["t"] == "v" and r["pts"] is not None:
+                vmax = r["pts"] if vmax is None else max(vmax, r["pts"])
+            elif r["t"] == "a" and r["pts"] is not None and vmax is not None:
+                n_a += 1
+                worst = max(worst if worst is not None else -1e9, (r["pts"] - vmax) / 90000.0)
+        oke, whye = exact(sl, "l_ahead")
+        lastl = vids(sl["rec"])[-1] if vids(sl["rec"]) else None
+        oka, whya = pcm_check(sl, os.path.join(media, "l_ahead.pcm"), fx["l_ahead_audio_t0"])
+        okx = (lead_f >= 5.0 and n_a > 0 and worst <= LEAD_TOL_S and oke and lastl is not None and lastl["eos"]
+               and oka)
+        whyx = "fixture: audio %.2f s ahead; %d timed records, the most ahead %s s; %s; audio %s" % (
+            lead_f, n_a, None if worst is None else round(worst, 3), whye, whya)
+    check("(x) l_ahead (audio 6.5 s ahead in the file): no AUDIO record over 1.3 s ahead of the video before it, "
+          "every AU, the audio whole", okx, whyx)
+    sm = played[7] if len(played) >= 8 and names[7] == "m_late" else None
+    _, first_a = ts_skew.skew(os.path.join(media, "m_late.packets"))
+    oky, whyy = False, "fixture: the first audio after %s s of video; m_late not the eighth played (%s)" % (
+        first_a, names[7:8])
+    if sm is not None:
+        oka, whya = pcm_check(sm, os.path.join(media, "m_late.pcm"), fx["m_late_audio_t0"])
+        oky = first_a is not None and first_a >= 2.5 and oka
+        whyy = "fixture: the first audio after %.2f s of video; audio %s" % (first_a or -1, whya)
+    check("(y) m_late (its audio past the probe): AUDIO records with PTS, the PCM equal to a reference decode",
+          oky, whyy)
+
     print("check_player: %s" % ("FAILURES" if fails else "ALL GREEN"))
     return 1 if fails else 0
+
+
+LEAD_TOL_S = 1.3       # the player's 1 s (AUD_LEAD), the two access units it holds back, a record's gathering
+
+
+def pcm_check(s, pcm, t0, min_s=3):
+    """the session's PCM against ffmpeg's decode of the file, EXACT (the Jellyfin test's audio_check):
+    every record with a PTS, at its own place within 1 ms; the frames equal from the first record's
+    place on, the first 2,048 excused when the player started past the reference's first frame (its
+    decoder's first AAC frame overlap-adds with zeros)"""
+    au = [r for r in s["rec"] if r["t"] == "a"]
+    if not au:
+        return False, "no AUDIO record"
+    if any(r["pts"] is None for r in au):
+        return False, "%d of %d records without PTS" % (sum(r["pts"] is None for r in au), len(au))
+    C = b"".join(r["data"] for r in au)
+    R = open(pcm, "rb").read()
+    e = round((au[0]["pts"] / 90000.0 - t0) * 48000)
+    skip = 0 if e == 0 else 2048
+    if len(C) // 4 < skip + 48000 * min_s:
+        return False, "only %d frames" % (len(C) // 4)
+    match = next((o for o in sorted(range(e - 48, e + 49), key=lambda o: abs(o - e)) if o >= 0 and
+                  C[skip * 4:] == R[(o + skip) * 4:(o + skip) * 4 + len(C) - skip * 4]), None)
+    if match is None:
+        return False, "no exact match within 1 ms of the PTS-derived offset %d" % e
+    f, worst = 0, 0
+    for r in au:
+        worst = max(worst, abs(match + f - round((r["pts"] / 90000.0 - t0) * 48000)))
+        f += len(r["data"]) // 4
+    if worst > 48:
+        return False, "a record's PTS %d frames from its place" % worst
+    return True, "%d records, %d frames equal from offset %d" % (len(au), len(C) // 4, match)
 
 
 if __name__ == "__main__":

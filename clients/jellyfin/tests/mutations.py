@@ -130,6 +130,27 @@ MUTATIONS = {
     "M21_colour_size_only": ("src/jf.c", [
         ("    if (cs && (!strcmp(cs, \"bt709\") || !strcmp(cs, \"smpte240m\"))) return H264RING_COLOUR_709;\n", ""),
     ], "(k2) the colour: the transcode's access units carry its source's BT.709 (3), direct play auto (0)"),
+    # (docs/jellyfin.md S12) the audio written in the demuxer's order again: never held for the video
+    "M22_interleave": ("common/player.c", [
+        ("        int ok = p->started && (t < 0 || p->vmax < 0 || t <= p->vmax + AUD_LEAD);\n",
+         "        int ok = 1;\n"),
+    ], "(v) item D (audio 6 s ahead in the stream): no AUDIO record over 1.3 s ahead of the video before it, "
+       "played to its end"),
+    # (S12) an audio stream the probe missed passed over again (av_find_best_stream's choice alone)
+    "M23_probe_pick": ("common/player.c", [
+        ("    for (unsigned i = 0; p->as < 0 && i < p->fmt->nb_streams; i++) {",
+         "    for (unsigned i = 0; 0 && i < p->fmt->nb_streams; i++) {"),
+    ], "(w) item D (its audio past the probe): AUDIO records with PTS, the PCM equal to a reference decode"),
+    # (S12) swr built at the open again, from the probe's parameters (none: the audio refused)
+    "M24_swr_open": ("common/player.c", [
+        ("    return avcodec_open2(p->adec, dec, NULL);\n",
+         "    if ((rc = avcodec_open2(p->adec, dec, NULL)) < 0) return rc;\n"
+         "    return swr_for(p, &p->adec->ch_layout, p->adec->sample_fmt, p->adec->sample_rate);\n"),
+    ], "(w) item D (its audio past the probe): AUDIO records with PTS, the PCM equal to a reference decode"),
+    # (S12) a frame without a time sent untimed (no carry from the frame before)
+    "M25_apts_carry": ("common/player.c", [
+        ("        int64_t fpts = ft == AV_NOPTS_VALUE ? p->apts_next\n", "        int64_t fpts = ft == AV_NOPTS_VALUE ? -1\n"),
+    ], "(w) item D (its audio past the probe): AUDIO records with PTS, the PCM equal to a reference decode"),
 }
 
 

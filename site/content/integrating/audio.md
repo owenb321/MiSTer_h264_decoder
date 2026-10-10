@@ -23,8 +23,16 @@ without one continues from the one before it. The library's
   one decoded frame per record is right. The core keeps at most **256 records** it has not
   yet played; past that it waits before reading further into the ring, and the video
   behind them waits too.
-- **Write audio and video in the order you have them**, the way a demuxer interleaves them:
-  audio a few hundred milliseconds ahead of the video it goes with is normal.
+- **Keep the audio within about a second of the video you have written.** Audio a few
+  hundred milliseconds ahead of the video it goes with is normal, and the order a demuxer
+  gives you is usually right. But 256 records of 20 ms are only 5.12 s. Some sources put their
+  audio further ahead than that in the stream (a server's live transcode after a seek has been
+  seen 6 s ahead). If you write them in that order, the core stops reading with the video
+  behind that audio still unread. The picture stops, and with the core as it is today it can
+  stay stopped until your program flushes the stream. So hold such audio back: write an AUDIO
+  record only when its time is at most about one second past the newest video access unit you
+  have written. Let the audio through when no more video is coming (the stream's end, or a
+  stretch with no video).
 
 ## How the core plays it
 

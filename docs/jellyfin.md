@@ -9,6 +9,10 @@ Jellyfin client next. **The interface is not frozen by this work** (the maintain
 findings, designed in `architecture.md` and versioned (0.10 onward) like any interface change,
 and nothing here assumes the current layout is final.
 
+**Since 2026-10-09 (§12):** a 9.6 Mbit/s transcode played without audio after some opens, and froze when the
+server put its audio seconds ahead of its video. Client fixes on `fix/jellyfin-transcode`, host-tested; ⏳ the
+rig. The core's livelock is designed only.
+
 A Jellyfin server (10.10 onward) holds the user's library. The client on the MiSTer's ARM asks it
 for a stream the core can decode -- the file itself when it fits D1's budget, a transcode when it
 does not -- demuxes it, decodes the audio to PCM, and hands the core H.264 access units and PCM
@@ -483,3 +487,84 @@ first extraction of many tracks) delays the exit until curl's timeout (20-30 s) 
 width as well as its lines (`raster_width()` beside main's `raster_lines()` / `raster_aspect()`),
 so the overlay and the screensaver's veil span a Native (HDMI) raster up to 1,024 wide. The
 host test's T8 hooks are `client_test_par` / `client_test_lines` (in `clients/common/ui.c`).
+
+## 12. A transcode with no audio, and a freeze (found 2026-10-09; client fixes `fix/jellyfin-transcode`)
+
+Status: **client fixes built, host tests GREEN and `--red`; ⏳ the rig** (the maintainer's film on .201,
+the 1 s status logger beside the client log). **The core's livelock: designed, not built** (Part B,
+`architecture.md` "The audio queue full and the clock behind it").
+
+**What the maintainer found (2026-10-09, testing 1.0.0 on .201).** A 1080p HEVC 10-bit film with surround
+sound, transcoded by the server to H.264 1280x720 at 9.6 Mbit/s with stereo AAC 384k (the HD box,
+Native (HDMI)). A 1 s logger of the status block ran beside the client's log.
+1. **After some opens (a start, a seek), no audio for the whole stretch.** The core's `n_audio` stayed 0.
+2. **A freeze that only a seek ended:** about 1 s of progress every ~20 s.
+
+**Causes.**
+- *No audio (the client).* At 9.6 Mbit/s the probe (1 MB / 0.5 s, sized in §10 for the 854x480
+  transcodes) can end before the TS's first audio packet. FFmpeg then knows the AAC stream only from the
+  PMT: no sample rate, no channels ("unspecified sample rate"). Two things then dropped it, measured on a
+  fixture (`tools/ts_skew.py --audio-from 3`):
+  - `av_find_best_stream` passes over an audio stream with no channels or rate: a transcode
+    (`audio_stream` -1) got none at all;
+  - `open_audio` built swr from those parameters and failed (EINVAL) when the track had been named
+    (direct play's `audio_index`).
+  The decoder itself opens with rate 0 and decodes 48 kHz stereo from the ADTS headers. And a probe
+  of 4 MB / 2 s misses the same fixture, so a larger probe alone is no fix.
+- *The freeze (triggered by the stream, held by the core).*
+  - After a seek the server's TS put the audio more than 5 s ahead of the video: its video encoder lags,
+    and FFmpeg's muxer interleaves up to 10 s. The logger saw 266 audio records in one second.
+  - The client wrote records in demux order. The core's 256-record audio queue (5.12 s) filled, so it
+    stopped reading the ring (by design, `integrating/audio.md`), and the video behind that audio starved.
+  - Late pictures then re-anchored the clock about 9 s back (`disp_reanchor` 1 -> 9). The queued audio was
+    early again and waited, playing silence (`aud_state` 1, `aud_gap` growing). The queue never drained,
+    and in the end unplayed audio held the whole 8 MB ring. That is the core's part (below).
+
+**The client's fixes** (`clients/common/player.c`, so the file player has them too):
+- **The audio is held to ~1 s ahead of the video.**
+  - The reader's one queue is now two: video and subtitles (512 packets / 6 MB, as before), and audio
+    (1,024 / 2 MB: ~20 s of AAC). Each packet keeps the demuxer's order.
+  - `take()` pops in that order, except that an audio packet more than `AUD_LEAD` (1 s) past the newest
+    video PTS handed on waits. So does audio before the first picture: it is no longer dropped when it
+    came first, only by its frames' times. The video goes on meanwhile.
+  - Audio goes anyway when nothing else can come: the reader done, or the audio queue full with no video
+    queued (an audio-only stretch). Otherwise the reader, blocked on the full audio queue, would never
+    bring the video the loop waits for. These packets are counted (`audio_forced`).
+  - At close the log says how far ahead the stream's audio ran, if more than 1 s.
+  - An untimed packet (a PES's later frames) is placed at the time the decoded audio has reached.
+- **An audio stream the probe missed is played.** If `av_find_best_stream` finds none, the first audio
+  stream a decoder exists for is taken. `open_audio` no longer builds swr: `audio()` builds it per frame
+  from the frame's own layout and rate (the DTS fix of 2026-10-06 already did).
+- **Every record keeps a PTS.** With the rate unknown, the TS demuxer times only each PES's first AAC
+  frame (410 of 469 records went out untimed on the fixture). The interface allows an untimed record (it
+  follows the one before), but a frame without a time now takes the time where the previous frame ended
+  (`apts_next`). The frames before the first picture are dropped by that time.
+- **A network input's probe is 4 MB / 2 s** (a file's stays 1 MB / 0.5 s). It catches audio starting
+  within 2 s, so the track has its name and channels, at the cost of start-up time when something is
+  missing. ⏳ To be measured against §10's table with `CLIENT_TIMING` on the rig, and kept only if cheap.
+
+**Gates.**
+- The Jellyfin host test (`clients/jellyfin/tests/`) has **item D**: a source only a transcode can carry,
+  whose one 10 s TS segment has no audio in its first 3 s of video and then the audio 6.4 s ahead
+  (`tools/ts_skew.py` moves the audio's PES units; every timestamp as encoded).
+  - (v): every AUDIO record within 1.3 s of the newest video before it in the ring (1.16 s measured;
+    6.4 s without the fix), every access unit the playlist's, and the item played to its end.
+  - (w): the PCM equal to a reference decode, every record timed.
+  - Both first check, from ffprobe's packets, that the fixture still holds its skew.
+  - Mutations M22 (demux order) -> (v); M23 (no fallback stream), M24 (swr at open), M25 (no PTS carry)
+    -> (w).
+- The file player's test has `l_ahead.ts` (audio 6.4 s ahead) and `m_late.ts` (no audio in the first 3 s):
+  (x) and (y), M30-M33. Its `wait_ended` now latches an end: a folder's last file opens the list's session
+  the moment its ENDED is read, faster than the script's 2 ms poll. M29 (swr built once at open) is now
+  written for the per-frame swr alone.
+- The fake cores still consume at once, with no 256-record gate. The checks score the client's rule
+  directly in what it wrote; that the core then does not freeze is the rig's to show.
+
+**Not fixed by the client:** audio BEHIND the video in the stream (the mirror case). The core reads video
+only as fast as it decodes (~0.5 s ahead of the clock), so audio that arrives seconds after its video is
+played late or dropped. Not seen from a server; holding video back for it would stall the picture
+whenever the audio is sparse. Left until a source shows it.
+
+**The core's part (Part B, designed in `architecture.md`, not built):** whatever a program writes, the
+core must not livelock. A program's interleave can still fill the queue: a program without this
+client's rule, or a source whose audio leads by more than the ring holds.

@@ -27,6 +27,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "tools"))
 import ring_model as M  # noqa: E402
+import ts_skew  # noqa: E402
 
 RING = 1 << 20                     # test_client.c's RING
 M32 = 0xFFFFFFFF
@@ -146,14 +147,18 @@ def main():
     md5_A = set(p["md5"] for p in fmA)
     md5_H = set(p["md5"] for p in fmH)
     md5_C = set(p["md5"] for p in framemd5(os.path.join(media, "C.framemd5")))
-    origin = {"A": fx["A_start"], "H": fx["hls_start"], "B": fx["B_start"], "C": fx["C_start"], None: 0.0}
+    fmD = framemd5(os.path.join(media, "D.framemd5"))
+    refD, refD_ok = split_ref(os.path.join(media, "D.h264"), fmD)
+    md5_D = set(p["md5"] for p in fmD)
+    origin = {"A": fx["A_start"], "H": fx["hls_start"], "B": fx["B_start"], "C": fx["C_start"], "D": fx["D_start"],
+              None: 0.0}
 
     S = load_sessions(outdir)
     for s in S:                                          # which stream a session carried
         v = vids(s["rec"])
         h = hashlib.md5(v[0]["data"]).hexdigest() if v else None
         s["what"] = ("A" if h in md5_A else "H" if h in md5_H else "B" if h in md5_B else
-                     "C" if h in md5_C else None)
+                     "C" if h in md5_C else "D" if h in md5_D else None)
 
     check("(0) the scenario ran to its end (no wait timed out)", T.get("completed") is True and not L["timeouts"],
           T.get("aborted", "") or "; ".join(x["what"] for x in L["timeouts"]))
@@ -247,7 +252,7 @@ def main():
               refA_ok, sa and sa["k"], len(va), len(refA), pts_ok, first_ok))
 
     # ---- (e) the audio ----
-    ok_e, why = audio_check(sa, media, fx)
+    ok_e, why = audio_check(sa, os.path.join(media, "A.pcm"), fx["A_audio_t0"], "item A")
     check("(e) item A's audio: AUDIO records with PTS, the PCM equal to a reference decode", ok_e, why)
 
     # ---- (f) the pause ----
@@ -429,6 +434,15 @@ def main():
     ok_q, why = trim_check(media, S, reqs, T, fmH, refH, origin)
     check("(q) the transcode's seek: the trimmed playlist -- the target's segment first, its IDR first", ok_q, why)
 
+    # ---- (v) / (w) item D: the transcode of 2026-10-09 (docs/jellyfin.md S12) ----
+    sd = next((s for s in S if s["what"] == "D"), None)
+    ok_v, why = interleave_check(sd, os.path.join(media, "D.packets"), refD, refD_ok, fmD, L)
+    check("(v) item D (audio 6 s ahead in the stream): no AUDIO record over 1.3 s ahead of the video before it, "
+          "played to its end", ok_v, why)
+    ok_w, why = audio_check(sd, os.path.join(media, "D.pcm"), fx["D_audio_t0"], "item D")
+    check("(w) item D (its audio past the probe): AUDIO records with PTS, the PCM equal to a reference decode",
+          ok_w, why)
+
     print("check_client: %s" % ("FAILURES" if fails else "ALL GREEN"))
     return 1 if fails else 0
 
@@ -570,7 +584,43 @@ def M_auth(h):
     return {k: urllib.parse.unquote(v) for k, v in re.findall(r'(\w+)="([^"]*)"', h)}
 
 
-def audio_check(sa, media, fx):
+LEAD_TOL_S = 1.3       # the client's 1 s (AUD_LEAD), the two access units it holds back, a record's gathering
+                       # (1.16 s measured); the fixture's skew is 6.4 s
+
+
+def interleave_check(sd, packets, refD, refD_ok, fmD, L):
+    """item D: the fixture holds the skew (audio first after >= 2.5 s of video -- past both probes --
+    and >= 5 s ahead of its video, more than the core's 256 records); in the session the client
+    wrote, every AUDIO record with a PTS within LEAD_TOL_S of the newest video PTS written before it;
+    every access unit the playlist's, the last with END_OF_STREAM, and the Stopped report near the
+    runtime (it did not stall)"""
+    lead_f, first_a = ts_skew.skew(packets)
+    why = "fixture: audio %.2f s ahead, the first after %.2f s of video" % (lead_f, first_a or -1)
+    if lead_f < 5.0 or first_a is None or first_a < 2.5:
+        return False, why + " (the fixture lost its skew)"
+    if sd is None:
+        return False, why + "; no session of item D"
+    vmax, worst, n_a = None, None, 0
+    for r in sd["rec"]:
+        if r["t"] == "v" and r["pts"] is not None:
+            vmax = r["pts"] if vmax is None else max(vmax, r["pts"])
+        elif r["t"] == "a" and r["pts"] is not None and vmax is not None:
+            n_a += 1
+            d = (r["pts"] - vmax) / 90000.0
+            worst = d if worst is None else max(worst, d)
+    vd = vids(sd["rec"])
+    stops = [x for x in L["reports"] if x["kind"] == "Stopped" and isinstance(x["body"], dict) and
+             x["body"].get("ItemId") == L["items"]["D"]]
+    end_pos = stops[-1]["body"]["PositionTicks"] / TICKS if stops else None
+    why += "; %d timed records, the most ahead %s s; AUs %d of %d, last EOS %s, Stopped at %s" % (
+        n_a, None if worst is None else round(worst, 3), len(vd), len(refD), bool(vd) and vd[-1]["eos"], end_pos)
+    ok = (n_a > 0 and worst <= LEAD_TOL_S and refD_ok and [v["data"] for v in vd] == refD and
+          all(v["pts"] == p["pts90"] for v, p in zip(vd, fmD)) and bool(vd) and vd[-1]["eos"] and
+          end_pos is not None and abs(end_pos - L["runtime"]["D"]) <= 1.0)
+    return ok, why
+
+
+def audio_check(sa, pcm, t0, what):
     """the client's PCM against the reference decode, EXACT. The offset comes from the first
     record's PTS; MKV's millisecond timestamps put a PTS-derived sample offset up to 24 samples off,
     so the exact match is searched within +-96 frames of it and required within 48 (1 ms). When the
@@ -580,15 +630,14 @@ def audio_check(sa, media, fx):
     decoder there, whose first AAC frame overlap-adds with zeros) are its first 2,048 frames
     excused. Every record's PTS must sit at its own place in the stream within 1 ms."""
     if sa is None:
-        return False, "no session of item A"
+        return False, "no session of " + what
     au = [r for r in sa["rec"] if r["t"] == "a"]
     if not au:
         return False, "no AUDIO record"
     if any(r["pts"] is None for r in au):
         return False, "%d of %d AUDIO records without PTS" % (sum(r["pts"] is None for r in au), len(au))
     C = b"".join(r["data"] for r in au)
-    R = open(os.path.join(media, "A.pcm"), "rb").read()
-    t0 = fx["A_audio_t0"]
+    R = open(pcm, "rb").read()
     e = round((au[0]["pts"] / 90000.0 - t0) * 48000)
     skip = 2048
     if len(C) // 4 < skip + 48000 * 5:

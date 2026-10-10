@@ -32,7 +32,7 @@ make -C "$repo/hps" >/dev/null || { echo "run_test: hps/ host build failed"; exi
 mkdir -p "$work"
 
 # ---- the fixtures (generated, never committed) ----
-RECIPE=6     # bump when a fixture's recipe below changes
+RECIPE=7     # bump when a fixture's recipe below changes
 fixtures() {
   # the stamp: the recipe AND the ffmpeg that made the references (the client links the same libraries)
   local stamp="$RECIPE $(ffmpeg -version | head -1)"
@@ -57,6 +57,20 @@ fixtures() {
   # CABAC, an IDR every second, no audio
   "${ff[@]}" -f lavfi -i "color=c=0x336699:size=320x180:rate=25" -t 300 -c:v libx264 -profile:v high \
       -preset veryfast -x264-params "$x264" -pix_fmt yuv420p "$media/C.mkv" || return 1
+  # D: the transcode of 2026-10-09 (docs/jellyfin.md S12) -- its audio first after 3 s of video (past
+  # the probe's reach: no sample rate), then up to 6.5 s AHEAD of its video in the stream (the server's
+  # muxer; the core keeps only 5.12 s it has not played). One 10 s segment; tools/ts_skew.py moves the
+  # audio's PES units, every timestamp as encoded
+  mkdir -p "$media/hlsD"
+  "${ff[@]}" -f lavfi -i "$pic" -f lavfi -i "$snd" -t 10 -map 0:v -map 1:a -c:v libx264 -profile:v high \
+      -preset veryfast -x264-params "$x264" -pix_fmt yuv420p -c:a aac -aac_pns 0 -b:a 128k -f mpegts "$media/D_src.ts" || return 1
+  python3 "$repo/tools/ts_skew.py" "$media/D_src.ts" "$media/hlsD/dseg0.ts" --lead 6.5 --audio-from 3 > "$media/D.skew" || return 1
+  printf '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.000000,\ndseg0.ts\n#EXT-X-ENDLIST\n' > "$media/hlsD/main.m3u8"
+  "${ff[@]}" -copyts -i "$media/hlsD/dseg0.ts" -map 0:v -c copy -f h264 "$media/D.h264" || return 1
+  "${ff[@]}" -copyts -i "$media/hlsD/dseg0.ts" -map 0:v -c copy -f framemd5 "$media/D.framemd5" || return 1
+  "${ff[@]}" -i "$media/D_src.ts" -map 0:a -f s16le -ac 2 -ar 48000 "$media/D.pcm" || return 1
+  # the file's order (pos) and times of every packet: check_client.py proves the skew is there
+  ffprobe -v error -show_entries packet=stream_index,pts,pos -of csv=p=0 "$media/hlsD/dseg0.ts" > "$media/D.packets" || return 1
   printf '1\n00:00:00,500 --> 00:00:02,500\nThe first cue\n\n2\n00:00:03,000 --> 00:00:05,500\n<i>The second</i> cue\n\n3\n00:00:06,500 --> 00:00:09,000\nThe third cue\non two lines\n\n4\n00:00:09,500 --> 00:00:11,500\nThe last cue\n' > "$media/A.srt"
   # the references (-copyts: the CLI would otherwise rebase every timestamp to start at 0)
   "${ff[@]}" -copyts -i "$media/A.mkv" -map 0:v -c copy -bsf:v h264_mp4toannexb -f h264 "$media/A.h264" || return 1
@@ -66,13 +80,16 @@ fixtures() {
   "${ff[@]}" -copyts -i "$media/B.mkv" -map 0:v -c copy -bsf:v h264_mp4toannexb -f framemd5 "$media/B.framemd5" || return 1
   "${ff[@]}" -copyts -i "$media/hls/main.m3u8" -map 0:v -c copy -f h264 "$media/hls.h264" || return 1
   "${ff[@]}" -copyts -i "$media/hls/main.m3u8" -map 0:v -c copy -f framemd5 "$media/hls.framemd5" || return 1
-  local a b c h t0
+  local a b c h t0 d d0
   a=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$media/A.mkv")
   b=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$media/B.mkv")
   c=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$media/C.mkv")
   h=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$media/hls/main.m3u8")
   t0=$(ffprobe -v error -select_streams a -show_entries frame=pts_time -read_intervals "%+1" -of csv=p=0 "$media/A.mkv" | head -1)
-  printf '{"A_start": %s, "B_start": %s, "C_start": %s, "hls_start": %s, "A_audio_t0": %s}\n' "$a" "$b" "$c" "$h" "$t0" > "$media/fixtures.json"
+  d=$(ffprobe -v error -show_entries format=start_time -of csv=p=0 "$media/hlsD/main.m3u8")
+  d0=$(ffprobe -v error -select_streams a -show_entries frame=pts_time -read_intervals "%+1" -of csv=p=0 "$media/D_src.ts" | head -1)
+  printf '{"A_start": %s, "B_start": %s, "C_start": %s, "hls_start": %s, "A_audio_t0": %s, "D_start": %s, "D_audio_t0": %s}\n' \
+      "$a" "$b" "$c" "$h" "$t0" "$d" "$d0" > "$media/fixtures.json"
   echo "$stamp" > "$media/recipe"
 }
 fixtures || { echo "run_test: the fixtures failed"; rm -rf "$media"; exit 2; }
@@ -90,7 +107,7 @@ run() {     # $1 = binary, $2 = the run's directory; returns 0 when both halves 
   rm -rf "$d"; mkdir -p "$d/dir" "$d/out"
   cp "$fonts/DejaVuSans.ttf" "$fonts/DejaVuSans-Bold.ttf" "$d/dir/"
   python3 "$here/fake_server.py" --dir "$d/dir" --media "$media" --log "$d/server.json" --portfile "$d/port" \
-      --runtime-a 12 --runtime-b 8 --runtime-c 300 > "$d/server.log" 2>&1 &
+      --runtime-a 12 --runtime-b 8 --runtime-c 300 --runtime-d 10 > "$d/server.log" 2>&1 &
   spid=$!
   for _ in $(seq 100); do [ -f "$d/port" ] && break; sleep 0.05; done
   [ -f "$d/port" ] || { echo "fake_server did not start" > "$d/log"; kill $spid 2>/dev/null; return 1; }
