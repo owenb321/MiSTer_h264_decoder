@@ -467,10 +467,11 @@ def write_want_de(name, img, de):
                 fh.write(("1%02x%02x%02x\n" % tuple(img[y, x])) if de[y, x] else "0000000\n")
 
 
-# the identity: 720x480 in Fit on the progressive raster is today's frame golden, bit for bit
+# the identity: 720x480 in Fit on the progressive raster is the frame golden, bit for bit -- render's
+# crop-aware identity chroma (hup over the crop's columns, vrow) against up_ident's whole frame
 _f = _fr.fit(45, 30, mode='fit')
 _img, _de = render(*L, _f)
-assert _de.all() and (_img == rgb(L[0], up(L[1]), up(L[2]))).all(), "the identity fit is not the frame golden"
+assert _de.all() and (_img == rgb(L[0], up_ident(L[1]), up_ident(L[2]))).all(), "the identity fit is not the frame golden"
 # the fitted cases: (name, seed, W, H in MBs, crop (cuy4, l, r, t, b), sar, mode, il, at[, pal])
 FIT = [("s",    11, 30, 17,  (0, 0, 0, 0, 0), (1, 1),   'fit',       False, False),   # 480x272 up, progressive
        ("t",    13, 45, 36,  (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  False),   # 720x576 pillarbox, 480i
