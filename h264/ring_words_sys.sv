@@ -112,7 +112,7 @@ module ring_words_sys (
         w = 64'd0;
         case (ix)
             7'd0: begin w[63:0] = 64'h343632485453694D; end
-            7'd1: begin w[15:0] = 16'h100; w[31:16] = 16'h20; w[47:32] = 16'h20; w[63:48] = 16'h28; end
+            7'd1: begin w[15:0] = 16'h101; w[31:16] = 16'h20; w[47:32] = 16'h20; w[63:48] = 16'h28; end
             7'd2: begin w[31:0] = 32'h31800000; w[63:32] = 32'h800000; end
             7'd3: begin w[31:0] = f_seq_head; w[63:32] = 32'h400000; end
             7'd4: begin w[7:0] = f_state; w[15:8] = f_err; w[23:16] = f_live; w[31:24] = f_osd; w[63:32] = f_err_pos; end

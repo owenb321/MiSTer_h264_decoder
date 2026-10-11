@@ -11,6 +11,15 @@
 //   +arm=X4  a picture 1 s behind: taken at once, not anchored (lateness is not a discontinuity)
 //   +arm=X5  a picture anchored first; a later ext_anc moves nothing
 //   +arm=X6  an untagged picture after the audio anchor: taken at once, the clock kept
+// (1.1, docs/architecture.md "Queued audio: a late picture never runs the clock back over it") with
+// aud_lead -- the queued audio ahead of the clock -- a picture's LATENESS never anchors:
+//   +arm=X7  X3 with aud_lead high: taken at once, NOT anchored, the clock kept
+//   +arm=X8  a picture 2.65 s behind the audio's clock taken (not anchored: the timeline set), the clock
+//            run on until the next, contiguous on the timeline, is past LATE_MAX: with aud_lead high it
+//            is taken at once, NOT anchored (disc's lateness leg)
+//   +arm=X9  X8 with aud_lead low (a stall: the audio ran dry or came late): it re-anchors, as in 1.0
+//   +arm=X10 aud_lead high, a picture anchored, then one 1 s past the timeline (> FWD_MAX): it re-anchors
+//            (the timeline's legs keep anchoring)
 //
 // The bench drives disp_sched's contract directly: a tick every 300 cycles, eval then
 // pickup (a cycle later) every 50,000 cycles (a "refresh"), half a refresh 750 ticks.
@@ -34,7 +43,7 @@ module disp_anc_tb;
     endtask
 
     localparam int REFRESH = 50000;          // cycles a refresh here (166 ticks + 2/3)
-    logic tick = 0, eval = 0, pickup = 0, ext_anc = 0;
+    logic tick = 0, eval = 0, pickup = 0, ext_anc = 0, aud_lead = 0;
     logic [32:0] ext_pts = 0;
     logic head_valid = 0, head_tag = 0;
     logic [32:0] head_pts = 0;
@@ -43,7 +52,7 @@ module disp_anc_tb;
     logic signed [33:0] disp_lag;
 
     disp_sched dut (
-        .clk, .rst_n, .tick, .eval, .pickup, .ll(1'b0), .ext_anc, .ext_pts, .half(11'd750),
+        .clk, .rst_n, .tick, .eval, .pickup, .ll(1'b0), .ext_anc, .ext_pts, .half(11'd750), .aud_lead,
         .head_valid, .head_tag, .head_pts, .head_dur_q3(27'd24024), .head_frame_t(23'd3003),
         .due, .anchor_now, .late, .contig, .next_due, .stc, .anchored, .next_valid, .disp_lag);
 
@@ -92,7 +101,35 @@ module disp_anc_tb;
         repeat (5) @(posedge clk); rst_n = 1;
         repeat (100) @(posedge clk);
         // (a case on the string trips iverilog's code generator: an if chain)
-        if (arm == "X5") begin
+        if (arm == "X8" || arm == "X9") begin
+            aud_lead = (arm == "X8");
+            audio_anchor(A[32:0]);
+            picture(1, A - 238500);                        // 2.65 s behind: taken at once, the timeline set
+            wait_taken(refresh + 5);
+            if (taken_at < 0 || anch_taken) fail("anchor", "the first picture (inside LATE_MAX) was not taken unanchored");
+            // the clock runs on: the next picture, contiguous (A - 238500 + 3003), past LATE_MAX (243,000) by
+            // ~4,500 ticks at its eval
+            while (stc < A + 33'd12000) @(posedge clk);
+            taken_at = -1;
+            r0 = refresh;
+            picture(1, A - 238500 + 3003);
+            wait_taken(r0 + 5);
+            if (taken_at < 0) fail("take", "the late picture was never taken");
+            else if (taken_at > r0 + 2) fail("take", $sformatf("the late picture taken at refresh %0d, want at once", taken_at - r0));
+            if (arm == "X8" && anch_taken) fail("anchor", "a late picture anchored the clock while the audio leads");
+            if (arm == "X9" && !anch_taken) fail("anchor", "a picture past LATE_MAX did not re-anchor with the audio not leading");
+        end else if (arm == "X10") begin
+            aud_lead = 1'b1;
+            picture(1, A);                                 // a picture anchors first
+            wait_taken(5);
+            if (!anch_taken) fail("anchor", "the first picture did not anchor");
+            taken_at = -1;
+            r0 = refresh;
+            picture(1, A + 3003 + 90000);                  // 1 s past the timeline
+            wait_taken(r0 + 5);
+            // (not anchored, it would wait out its second: never taken within the limit)
+            if (taken_at < 0 || !anch_taken) fail("anchor", "a jump past FWD_MAX did not re-anchor while the audio leads");
+        end else if (arm == "X5") begin
             picture(1, A);                                 // a picture anchors first
             wait_taken(5);
             if (!anch_taken || !anchored) fail("anchor", "the first picture did not anchor");
@@ -111,6 +148,7 @@ module disp_anc_tb;
             else if (arm == "X3") picture(1, A - 270000);  // 3 s behind
             else if (arm == "X4") picture(1, A - 90000);   // 1 s behind
             else if (arm == "X6") picture(0, 0);           // untagged
+            else if (arm == "X7") begin aud_lead = 1'b1; picture(1, A - 270000); end   // 3 s behind, the audio leading
             else begin $display("FAIL [harness] unknown arm %s", arm); $fatal(1); end
             wait_taken(r0 + 400);
             // X1: due when STC >= PTS - 750; the STC gains 166.7 ticks a refresh from A
@@ -119,7 +157,7 @@ module disp_anc_tb;
             else if (taken_at < want - 1 || taken_at > want + 1)
                 fail("take", $sformatf("taken at refresh %0d, want %0d (+-1)", taken_at - r0, want - r0));
             if ((arm == "X2" || arm == "X3") && !anch_taken) fail("anchor", "a picture past the bounds was not re-anchored");
-            if ((arm == "X1" || arm == "X4" || arm == "X6") && anch_taken) fail("anchor", "the picture re-anchored the audio's running clock");
+            if ((arm == "X1" || arm == "X4" || arm == "X6" || arm == "X7") && anch_taken) fail("anchor", "the picture re-anchored the audio's running clock");
             if ((arm == "X2" || arm == "X3") && anch_taken && stc < head_pts) fail("stc", "the re-anchor did not move the clock to the picture");
         end
         $display("disp_anc_tb: %s taken at refresh %0d, anchored %b, STC %0d", arm, taken_at, anch_taken, stc);

@@ -973,9 +973,13 @@ the identity").
 - [x] On .201, control arm first: 1.0.0's client froze and played two opens silent; this branch played
       all four opens with audio and no re-anchor.
 - [x] Merged (PR #9). ⏳ The maintainer's own round on the film.
-- [ ] **The core's livelock (Part B), designed only** (`architecture.md` "Queued audio: a late picture
-      never runs the clock back over it"): no lateness anchor while queued audio is on time; proposed as
-      interface 1.1. **Go given 2026-10-10 (the maintainer: "let's do part b now")**; alternatives B2 / B3 there.
+- [ ] **The core's livelock (Part B), interface 1.1** -- 🔧 `feature/aud-clock` (`architecture.md` "Queued
+      audio: a late picture never runs the clock back over it"). Go given 2026-10-10 (the maintainer: "let's
+      do part b now"). The rule, refined while building (the audio's history, not its state, tells the
+      freeze from a stall): no lateness anchor while the queued audio LEADS (waited for the clock or started
+      it, neither ran dry nor came late since). Built: `aud_play`'s `aud_lead`, `disp_sched`'s `lat`, the
+      layout's version 1.1; benches `run_disp_anc.sh` X7-X10, `run_aud_play.sh` `[lead]` A12 / A13,
+      `run_disp_sched.sh` heldlead. ⏳ The scheduler gate, the fit, the rig (control arm first).
 
 ## Phase 7 — For integrators
 

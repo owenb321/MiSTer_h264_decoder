@@ -1102,6 +1102,7 @@ wire signed [15:0] disp_lag_ms;
 wire [32:0] disp_stc;
 wire        disp_stc_run;
 wire        aud_anc;                  // 0.5: aud_play's audio anchor
+wire        aud_lead;                 // 1.1: aud_play: the queued audio ahead of the clock (disp_sched: no lateness anchor)
 wire [32:0] aud_anc_pts;
 // 0.5: aud_play's status (words 40-44; the audio path itself is below, by the audio outputs)
 wire  [1:0] aud_st_state;
@@ -1120,6 +1121,7 @@ disp_ctl disp_ctl_inst (
 	.pause          (ctl_pause),              // 0.5: word 34's PAUSE -- the STC and the display stand still
 	.aanc           (aud_anc),                // 0.5: the audio starts the STC (no picture has)
 	.aanc_pts       (aud_anc_pts),
+	.aud_lead       (aud_lead),               // 1.1: the queued audio ahead of the clock: no lateness anchor
 	.rec_take       (rq_take),
 	.rec_end        (rq_end),
 	.rec_store      (rq_store),
@@ -2077,6 +2079,7 @@ aud_play aud_play_inst (
 	.stc_run     (disp_stc_run),
 	.aanc        (aud_anc),
 	.aanc_pts    (aud_anc_pts),
+	.aud_lead    (aud_lead),
 	.ll          (aud_ll),
 	.pause       (ctl_pause),
 	.atten       (ctl_atten),

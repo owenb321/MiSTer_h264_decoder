@@ -332,8 +332,10 @@ audio stream the probe missed played, every record timed; a larger probe measure
 `--red` (Jellyfin (v) / (w), the player (x) / (y), fixtures by `tools/ts_skew.py`), the manual's `integrating/audio.md` "keep
 the audio within about a second"; no RTL beyond `dev-jftranscode` (no fit); **on .201 with the maintainer's film, control
 arm first** (`history.md` §45: 1.0.0's client froze and played two opens silent; this one clean on every open). The core's
-livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): designed; the go
-given 2026-10-10, its own branch next. 91 % ALM, 9 DSP left.
+livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): **interface 1.1,
+building on `feature/aud-clock`** (the go given 2026-10-10): no lateness re-anchor while the queued audio leads (it waited
+for the clock or started it, and has neither run dry nor come late since: `aud_play`'s `aud_lead` -> `disp_sched`); the
+layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core). ⏳ benches, fit, rig. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

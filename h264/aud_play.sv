@@ -55,6 +55,15 @@
 //           ~1,000 ppm (ten times a crystal's error). Past LL_MAX (a burst) -> G_DROP down to
 //           LL_START. An underrun -> G_ARM.
 // The attenuation (aud_gain, Q1.15, 0 = exactly unity) is applied to the frame as it plays.
+// THE LEAD (interface 1.1; docs/architecture.md "Queued audio: a late picture never runs the clock
+// back over it"): aud_lead says the queued audio was written AHEAD of the clock -- it has waited for
+// the STC (armed with a timed head not yet due, the clock running) or started it (the audio anchor)
+// since it last ran dry (the queue empty) or arrived late (a late drop, G_DROP). While it
+// is high disp_sched does not move the clock back to a late picture: the audio is right and the
+// pictures are what is late (a transcode's audio 6 s ahead filled the queue, and each picture that
+// still came re-anchored the clock back behind the waiting audio: a livelock, 2026-10-09). A stall
+// clears it (the ring drains both streams, the audio runs dry or comes back late), so the stall's
+// late picture re-anchors as before. Paced streams only; 0 in low latency.
 //
 // Quartus 17: no functions, no N'() casts; the FIFOs are sfifo (M10K, a synchronous read).
 
@@ -98,6 +107,7 @@ module aud_play #(
     input  wire         stc_run,
     output logic        aanc,                // one cycle: start the STC at aanc_pts (sent only while !stc_run)
     output logic [32:0] aanc_pts,
+    output logic        aud_lead,            // (1.1) the queued audio is ahead of the clock (THE LEAD, above)
     input  wire         ll,                  // the stream's LOW_LATENCY (its first VIDEO_AU; 0 before one)
     input  wire         pause,
     input  wire   [7:0] atten,
@@ -235,6 +245,7 @@ module aud_play #(
     end
     logic [24:0] anc_tmr;
     logic        anc_sent;
+    logic        lead;                     // THE LEAD's state (aud_lead: gated by ll and the queue)
     logic [31:0] out_s;
     // events for the counters (reset_n): registered pulses
     logic ev_play, ev_rec, ev_gap, ev_late, ev_under, ev_sdrop, ev_srep, ev_anc, ev_off;
@@ -257,7 +268,7 @@ module aud_play #(
             tl <= '0; tl_v <= 1'b0;
             gs <= G_ARM; gap_arm <= 1'b0; drop1 <= 1'b0; rep1 <= 1'b0; lw <= '0; qmin <= '1;
             qh0 <= '1; qh1 <= '1; qh2 <= '1; nwin <= '0;
-            anc_tmr <= '0; anc_sent <= 1'b0; aanc <= 1'b0; aanc_pts <= '0; out_s <= '0;
+            anc_tmr <= '0; anc_sent <= 1'b0; aanc <= 1'b0; aanc_pts <= '0; out_s <= '0; lead <= 1'b0; aud_lead <= 1'b0;
             q_rec <= '0; q_samples <= '0;
             ev_play <= 1'b0; ev_rec <= 1'b0; ev_gap <= 1'b0; ev_late <= 1'b0; ev_under <= 1'b0; ev_sdrop <= 1'b0; ev_srep <= 1'b0; ev_anc <= 1'b0;
             ev_off <= 1'b0; off_v <= '0;
@@ -331,6 +342,19 @@ module aud_play #(
                     end
                 end
             endcase
+
+            // ---- THE LEAD: set by waiting ahead of the clock or starting it; cleared by running dry
+            // or arriving late (the gate's state as it stood at the cycle's start, as the gate reads it).
+            // Low latency is excluded at aud_lead alone (the stream's mode is fixed until its reset). Ran
+            // dry = the queue empty (an underrun with records still queued is only a fetch behind)
+            if (q_rec == 9'd0 ||                                                  // ran dry
+                (gs == G_PLAY && ptick && hs_v && hs_tag && far_late) ||           // late: to G_DROP
+                (gs == G_ARM && hs_v && !pause && stc_run && hs_tv && due && far_late))
+                lead <= 1'b0;
+            else if ((gs == G_ARM && hs_v && !pause && stc_run && hs_tv && !due) ||  // waiting for the clock
+                     aanc)                                                          // the audio anchor (sent last cycle)
+                lead <= 1'b1;
+            aud_lead <= lead && !ll && q_rec != 9'd0;
 
             // ---- the anchor's wait (paced, armed with a head, the STC stopped) ----
             if (stc_run) anc_sent <= 1'b0;

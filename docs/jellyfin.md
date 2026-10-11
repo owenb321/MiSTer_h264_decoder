@@ -492,7 +492,7 @@ host test's T8 hooks are `client_test_par` / `client_test_lines` (in `clients/co
 
 Status: **the client's fixes ✅ MERGED (PR #9), host tests GREEN and `--red`, verified on .201** with the maintainer's film,
 control arm first (`history.md` §45: 1.0.0's client froze and played two opens silent; this branch clean on
-every open). ⏳ The maintainer's own round. **The core's livelock: designed; the go given 2026-10-10** (Part B,
+every open). ⏳ The maintainer's own round. **The core's livelock: interface 1.1, building on `feature/aud-clock`** (Part B,
 `architecture.md` "Queued audio: a late picture never runs the clock back over it").
 
 **What the maintainer found (2026-10-09, testing 1.0.0 on .201).** A 1080p HEVC 10-bit film with surround

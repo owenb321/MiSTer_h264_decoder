@@ -19,6 +19,15 @@
 //   +arm=A10  a stream reset while a fetch is in flight: nothing of the old stream plays after
 //   +arm=A11  paced: the clock starts 100 ms after the audio's first frame (the picture came
 //             later): the late frames dropped before the gate opens, then every frame on time
+//   +arm=A12  (1.1) paced: A1's start (the audio waits 10 ms for the clock), then an overlap (a record
+//             50 ms early on the timeline): its late frames dropped, and the lead with them
+//   +arm=A13  (1.1) paced: a run that waited for the clock runs dry (an underrun), then untagged audio
+//             on the timeline: played at once, the lead not back
+// THE LEAD (1.1, aud_lead; docs/architecture.md "Queued audio: a late picture never runs the clock back
+// over it") is scored on every frame played, from what the bench saw happen: high once the audio
+// waited for the running clock (A1) or started it (A5Q), low after an underrun or a late drop until it
+// waits again (A12, A13), never when it never waited (A11) or in low latency (A6, with a running clock
+// and records ahead of it so the gate's own terms are exercised).
 //
 // Checks (each FAIL names its arm): [order] a frame out of order or repeated (a repeat is
 // allowed only as a counted low-latency slip); [sync] a paced frame more than 3 ticks off
@@ -28,7 +37,8 @@
 // being fetched, or out of order; [rate] the tick not exactly 48 kHz; [anchor] the anchor
 // wrong, missing or sent while the STC runs; [pause] a frame played or taken while paused;
 // [atten] a scaled frame differs; [flush] a frame of the old stream after the reset; [ll] the
-// low-latency queue unbounded or the slip in the wrong direction; [hang] the run never ended.
+// low-latency queue unbounded or the slip in the wrong direction; [lead] aud_lead not as THE LEAD above
+// says; [hang] the run never ended.
 // Scoring with !==; PASS: aud_play_tb is printed only when every check held.
 
 `timescale 1ns/1ps
@@ -64,7 +74,7 @@ module aud_play_tb;
     logic        af_go, af_busy, af_valid, af_empty, af_rd;
     logic [31:0] af_addr;  logic [3:0] af_n;  logic [63:0] af_dout;
     logic [32:0] stc = 0;  logic stc_run = 0;
-    logic        aanc;  logic [32:0] aanc_pts;
+    logic        aanc;  logic [32:0] aanc_pts;  logic aud_lead;
     logic        ll = 0, pause = 0;  logic [7:0] atten = 0;
     logic signed [15:0] audio_l, audio_r;
     logic [1:0]  st_state;  logic [8:0] q_rec;  logic [31:0] q_samples;
@@ -75,7 +85,7 @@ module aud_play_tb;
         .clk, .rst_n, .srst_n, .lrst_n,
         .ad_push, .ad_pos, .ad_len, .ad_pts, .ad_ptsv, .ad_room, .a_hold_v, .a_hold_idx, .aud_idle,
         .af_go, .af_addr, .af_n, .af_busy, .af_dout, .af_valid, .af_empty, .af_rd,
-        .stc, .stc_run, .aanc, .aanc_pts, .ll, .pause, .atten,
+        .stc, .stc_run, .aanc, .aanc_pts, .aud_lead, .ll, .pause, .atten,
         .audio_l, .audio_r,
         .st_state, .q_rec, .q_samples, .n_played, .n_records, .n_gap, .n_late,
         .n_underruns, .n_slip_drop, .n_slip_rep, .n_anchor, .offset);
@@ -210,10 +220,13 @@ module aud_play_tb;
     logic [15:0] slip_d, slip_r;
     bit     in_pause_check = 0;
     int     q_max = 0;
+    int     lead_hi = 0, lead_lo = 0, lead_hi_from = 0;   // [lead]: frames played with aud_lead high / low,
+    int     lead_mark = 1 << 30;                           // and high from frame lead_mark on
     always @(posedge clk) begin
         if (dut.tick && srst_n) begin
-            logic [32:0] s;  int id;
+            logic [32:0] s;  int id;  logic ld;
             s = stc;
+            ld = aud_lead;                         // [lead] as the frame was taken (the last take empties the queue)
             repeat (3) @(posedge clk);             // out_s, the multiply, audio_l / audio_r
             if (arm == "A9") begin
                 if ({audio_r, audio_l} !== 32'd0) begin
@@ -226,6 +239,7 @@ module aud_play_tb;
                     if (audio_l !== el || audio_r !== er)
                         fail("atten", $sformatf("frame %0d: %0d / %0d, want %0d / %0d", k, audio_l, audio_r, el, er));
                     last_id = k; played++;
+                    if (ld) lead_hi++; else lead_lo++;
                 end else silence++;
             end else begin
                 id = {audio_r, audio_l};
@@ -237,6 +251,8 @@ module aud_play_tb;
                     else if (id <= last_id) fail("order", $sformatf("frame %0d after %0d", id, last_id));
                     else dropped += id - last_id - 1 - ((last_id == 0) ? (stream_first_id - 1) : 0);
                     last_id = id; played++;
+                    if (ld) lead_hi++; else lead_lo++;
+                    if (ld && id >= lead_mark) lead_hi_from++;
                     if (!ll && ftime[id] >= 0) begin
                         longint e;
                         e = {s, 3'b000};
@@ -294,7 +310,7 @@ module aud_play_tb;
         // (a case on the string itself trips an iverilog code-generation assertion)
         arm_n = (arm == "A1" || arm == "A9") ? 0 : (arm == "A2" || arm == "A3") ? 1 : (arm == "A4") ? 2 :
                 (arm == "A5" || arm == "A5Q") ? 3 : (arm == "A6" || arm == "A7") ? 4 : (arm == "A8") ? 5 :
-                (arm == "A10") ? 6 : (arm == "A11") ? 7 : -1;
+                (arm == "A10") ? 6 : (arm == "A11") ? 7 : (arm == "A12") ? 8 : (arm == "A13") ? 9 : -1;
         case (arm_n)
             0: begin   // A1, A9
                 if (arm == "A9") atten = 8'd13;
@@ -361,9 +377,10 @@ module aud_play_tb;
                 // records of 10 ms (480 frames) every 480 x 562.5 x (1 -/+ 2,500 ppm) cycles
                 real per;
                 ll = 1;
+                anchor_stc(0);                     // (1.1) a running clock, the records ahead of it: [lead]
                 per = 480.0 * 562.5 * ((arm == "A6") ? (1.0 - 0.0025) : (1.0 + 0.0025));
                 for (int r = 0; r < 200; r++) begin
-                    queue_record(480, 1, r * 900);
+                    queue_record(480, 1, 90000 + r * 900);
                     repeat ($rtoi(per) - 1) @(posedge clk);
                 end
                 // the direction is scored while the producer runs: once it stops, the queue
@@ -429,9 +446,44 @@ module aud_play_tb;
                 if (dropped != n_late || played + dropped != total)
                     fail("complete", $sformatf("played %0d + dropped %0d (counted %0d) of %0d", played, dropped, n_late, total));
             end
+            8: begin   // A12
+                for (int r = 0; r < 8; r++) queue_record($urandom_range(200, 600), 1, t0 + (nid - 1) * 15 / 8);
+                lead_mark = nid;                    // the overlap's first frame
+                queue_record(3000, 1, t0 + (nid - 1) * 15 / 8 - 4500);
+                for (int r = 0; r < 4; r++) queue_record($urandom_range(200, 600), 0, 0);
+                repeat (500) @(posedge clk);
+                anchor_stc(t0 - 900);               // the audio waits 10 ms for the clock: the lead
+                wait_played(nid - 1, 60_000_000);
+                wait_idle(100000);
+                if (lead_hi == 0) fail("lead", "never high although the audio waited for the clock");
+                if (lead_hi_from != 0) fail("lead", $sformatf("%0d frames after the late drop played with it high", lead_hi_from));
+                if (played + dropped != nid - 1) fail("complete", $sformatf("played %0d + dropped %0d of %0d", played, dropped, nid - 1));
+            end
+            9: begin   // A13
+                for (int r = 0; r < 6; r++) queue_record($urandom_range(200, 400), 1, t0 + (nid - 1) * 15 / 8);
+                anchor_stc(t0 - 900);               // waits for the clock: the lead
+                wait_idle(40_000_000);              // ran dry: an underrun
+                if (aud_lead !== 1'b0) fail("lead", "high with the queue empty");
+                if (lead_hi == 0) fail("lead", "never high although the audio waited for the clock");
+                repeat (20000) @(posedge clk);
+                lead_mark = nid;
+                // on the old timeline, untagged: ~70 ticks past it now, inside SLIP -- played at once, neither
+                // waited for nor dropped (their [sync] not scored: the bench's timeline is not the gate's here)
+                tl = -1;
+                for (int r = 0; r < 4; r++) queue_record($urandom_range(200, 400), 0, 0);
+                wait_played(nid - 1, 40_000_000);
+                wait_idle(100000);
+                if (lead_hi_from != 0) fail("lead", $sformatf("%0d frames after the underrun played with it high", lead_hi_from));
+                if (played != nid - 1) fail("complete", $sformatf("%0d of %0d played", played, nid - 1));
+            end
             default: begin $display("FAIL [harness] unknown arm %s", arm); $fatal(1); end
         endcase
-        if (arm != "A6" && arm != "A7" && arm != "A3" && arm != "A11" && dropped != 0) fail("complete", $sformatf("%0d frames skipped", dropped));
+        // [lead] where the arm's whole story says it
+        if ((arm == "A1" || arm == "A5Q") && lead_lo != 0)
+            fail("lead", $sformatf("%0d frames played with it low (of %0d) although the audio waited or anchored", lead_lo, played));
+        if ((arm == "A11" || arm == "A6" || arm == "A7") && lead_hi != 0)
+            fail("lead", $sformatf("%0d frames played with it high (of %0d): the audio never waited%s", lead_hi, played, ll ? " (low latency)" : ""));
+        if (arm != "A6" && arm != "A7" && arm != "A3" && arm != "A11" && arm != "A12" && dropped != 0) fail("complete", $sformatf("%0d frames skipped", dropped));
         if (arm != "A10" && n_played != played) fail("complete", $sformatf("n_played %0d, the bench saw %0d", n_played, played));
         $display("aud_play_tb: %s %0d frames played, %0d silent ticks, %0d dropped, gap %0d late %0d under %0d slips %0d/%0d anchor %0d, worst sync %0d/8 tick",
                  arm, played, silence, dropped, n_gap, n_late, n_underruns, n_slip_drop, n_slip_rep, n_anchor, off_max);

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ring_layout.py -- the HPS interface's layout, written down once (docs/architecture.md
-"The HPS interface"). Interface version 1.0: FROZEN (roadmap Phase 7). Nothing published
+"The HPS interface"). Interface version 1.1 (1.0 FROZEN, roadmap Phase 7; 1.1 changes a behaviour only). Nothing published
 here moves or changes its meaning within 1.x; a minor version only adds (a field in bits
 that read 0, a word that read 0, a record type that was refused), and 0 must keep meaning
 what it meant. Any change here is an interface change -- bump VERSION, update the
@@ -49,7 +49,10 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-VERSION_MAJOR, VERSION_MINOR = 1, 0    # 1.0: the 0.17 layout, frozen (the library accepts a core of
+VERSION_MAJOR, VERSION_MINOR = 1, 1    # 1.1 (2026-10-10, behaviour only, the layout unchanged): a late
+                                       # picture never runs the clock back over queued audio that leads it
+                                       # (docs/architecture.md "Queued audio: ..."; a 1.1 program may rely on it);
+                                       # 1.0: the 0.17 layout, frozen (the library accepts a core of
                                        # the same major and a minor >= its own);
                                        # 0.2 (P6 step 3): word 30, the fit's telemetry (additive);
                                        # 0.3 (P6 part 2): word 30's raster report (additive);

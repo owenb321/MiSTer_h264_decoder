@@ -7,6 +7,9 @@
 #   X1 0.2 s ahead: waits, taken without anchoring   X2 1 s ahead: re-anchors
 #   X3 3 s behind: re-anchors   X4 1 s behind: taken at once, not anchored
 #   X5 a picture first: a later audio anchor moves nothing   X6 untagged: taken, clock kept
+# (1.1) aud_lead, the queued audio ahead of the clock: X7 X3 with it -- taken, not anchored; X8 a late
+#   picture contiguous on the timeline (disc's lateness leg) with it -- not anchored; X9 the same
+#   without it (a stall) -- re-anchors; X10 with it, a jump past FWD_MAX -- re-anchors
 # (The pause gates disp_ctl's tick / eval / pickup / skip: wiring, scored on the rig.)
 #
 # --red: mutations on a COPY, each caught by its own arm.
@@ -17,7 +20,7 @@ fail=0
 red=0; [ "${1:-}" = "--red" ] && red=1
 RTL="h264/disp_sched.sv"
 TB="bench/h264/disp_anc_tb.sv"
-ARMS="X1 X2 X3 X4 X5 X6"
+ARMS="X1 X2 X3 X4 X5 X6 X7 X8 X9 X10"
 run_arm() { timeout 300 vvp -n "$1" +arm="$2" > "$3" 2>&1; }
 
 echo "== GREEN: disp_anc_tb =="
@@ -67,7 +70,14 @@ PYEOF
   mut N2 $S "(next_valid ? disc : far)" "(next_valid ? disc : 1'b0)" X2 "anchor" &
   mut N3 $S "if (ext_anc && !anchored) begin stc <= ext_pts;" "if (ext_anc) begin stc <= ext_pts;" X5 "stc" &
   mut N4 $S "if (ext_anc && !anchored) begin stc <= ext_pts; anchored <= 1'b1; end" "if (ext_anc && !anchored) begin anchored <= 1'b1; end" X1 "anchor" &
-  mut N5 $S "far = (d_stc_pic > LATE_MAX_TICKS) || (d_stc_pic < -FWD_MAX_TICKS);" "far = (d_stc_pic < -FWD_MAX_TICKS);" X3 "anchor" &
+  mut N5 $S "far = lat || (d_stc_pic < -FWD_MAX_TICKS);" "far = (d_stc_pic < -FWD_MAX_TICKS);" X3 "anchor" &
+  # (1.1) the audio's lead ignored: a late picture anchors behind leading audio (the far leg, then disc's)
+  mut N6 $S "lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;" "lat  = (d_stc_pic > LATE_MAX_TICKS);" X7 "anchor" &
+  mut N6b $S "lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;" "lat  = (d_stc_pic > LATE_MAX_TICKS);" X8 "anchor" &
+  # the lateness leg gone whatever the audio (a stall's late picture never re-anchors)
+  mut N7 $S "lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;" "lat  = 1'b0;" X9 "anchor" &
+  # the lead suppressing the timeline's legs too
+  mut N8 $S "disc = tag_e && anchored && next_valid &&" "disc = tag_e && anchored && next_valid && !lead_q &&" X10 "anchor" &
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

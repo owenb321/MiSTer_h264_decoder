@@ -14,7 +14,8 @@
 #     pairs: a late pair is taken at once, off its field or not)   ps78 (C4 pic_struct 7 / 8)   unpaired (C5 single fields)
 #   geom (C6 sizes, no VUI timing: the default and its flag)   late ([5] a late decoder)
 #   back ([7a] a backward PTS jump)   back200 ([7d] 200 ms back: only the backward leg)   backfld ([7e] the same on single fields)   gap03 ([7b] 0.3 s waited out)   gap2s ([7c] re-anchors)
-#   held ([8] LATE_MAX after a 4 s still)   starve400 ([8b] a 400 ms starvation is NOT a
+#   held ([8] LATE_MAX after a 4 s still)   heldlead ((1.1) the same with aud_lead high -- the queued
+#   audio ahead of the clock: the late pictures shown at once, NO re-anchor)   starve400 ([8b] a 400 ms starvation is NOT a
 #   re-anchor -- MiSTer_DVD's HW round B defect)
 #   llsteady / llearly / llburst / llend (P3f, LOW_LATENCY: every head due -- llearly's arrive
 #     3 refreshes ahead of their PTS; a head a newer picture
@@ -36,6 +37,7 @@
 # --red: mutations on a COPY, each caught by its own arm:
 #   D1  due at STC >= PTS (the half-refresh rounding lost)       film32   -> [refresh]
 #   D2  lateness re-anchors (LATE_MAX -> half a refresh)         starve400 -> [count]
+#   D27 (1.1) the audio's lead ignored                           heldlead -> [refresh]|[count]
 #   D3  the backward-jump leg removed                            back200  -> [refresh]|[count]
 #       (on `back`, 5 s back, the LATE_MAX leg re-anchors too: it cannot tell them apart)
 #   D4  the forward-gap leg widened to 100 s                     gap2s    -> [refresh]|[count]
@@ -193,7 +195,9 @@ PYEOF
     rm -rf "$d"
   }
   mut D1 h264/disp_sched.sv "(an || ll || (d_stc_want >= -HALF_SCAN))" "(an || ll || (d_stc_want >= 34'sd0))" film32 refresh &
-  mut D2 h264/disp_sched.sv "(d_stc_pic > LATE_MAX_TICKS));" "(d_stc_pic > HALF_SCAN));" starve400 count &
+  mut D2 h264/disp_sched.sv "lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;" "lat  = (d_stc_pic > HALF_SCAN) && !lead_q;" starve400 count &
+  # (1.1) the audio's lead ignored: heldlead's late pictures re-anchor behind the leading audio
+  mut D27 h264/disp_sched.sv "lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;" "lat  = (d_stc_pic > LATE_MAX_TICKS);" heldlead "refresh|count" &
   mut D3 h264/disp_sched.sv "((d_pic_next < -\$signed({11'd0, head_frame_t})) ||" "((1'b0) ||" back200 "refresh|count" &
   mut D4 h264/disp_sched.sv "(d_pic_next > FWD_MAX_TICKS) ||" "(d_pic_next > 34'sd9000000) ||" gap2s "refresh|count" &
   mut D5 h264/disp_ctl.sv "4'd5, 4'd6:       nt = 3'd3;" "4'd5, 4'd6:       nt = 3'd2;" film32 refresh &

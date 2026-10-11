@@ -94,6 +94,7 @@ module disp_ctl (
     input  wire         pause,             // (0.5) word 34's PAUSE: the STC and the display stand still
     input  wire         aanc,              // (0.5) the audio anchor (aud_play)
     input  wire  [32:0] aanc_pts,
+    input  wire         aud_lead,          // (1.1) the queued audio is ahead of the clock (aud_play): no lateness anchor
     output logic        rec_take,
     input  wire         rec_end,
     input  wire  [4:0]  rec_store,
@@ -300,7 +301,7 @@ module disp_ctl (
     logic pick;                            // the pickup takes the head
     disp_sched u_sched (
         .clk(clk), .rst_n(rst_n), .tick(tick && !pause), .eval(ev_pulse), .pickup(pick), .ll(low_lat),
-        .ext_anc(aanc), .ext_pts(aanc_pts),
+        .ext_anc(aanc), .ext_pts(aanc_pts), .aud_lead(aud_lead),
         .half(pal ? 11'd900 : 11'd750),        // half a refresh, ticks (1,800 / 1,500 or 1,501.5)
         .head_valid(rec_valid && !rec_end && prep && !ended), .head_tag(tag), .head_pts(pts_eff),
         .head_dur_q3(dur_q3), .head_frame_t({1'b0, fq[23:2]}),

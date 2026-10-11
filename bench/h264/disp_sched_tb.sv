@@ -97,6 +97,7 @@ wire [4:0]  sh_store;
 wire [7:0]  sh_w, sh_hf;
 wire [31:0] n_dc, n_pick, n_skip;
 reg         ll = 1'b0;                  // the scenario's LOW_LATENCY (the .stim header)
+reg         lead = 1'b0;                // (1.1) the scenario's aud_lead: the queued audio ahead of the clock (the .stim header)
 wire [7:0]  n_reanchor;
 wire [3:0]  n_lone;                     // UMD's lone-PTS rules (display.md S10)
 wire [15:0] n_late, n_starve, n_cadence;
@@ -106,7 +107,7 @@ wire        rate_v;
 wire [1:0]  rate_cls;
 disp_ctl u_ctl (
     .clk(sclk), .rst_n(srst_n), .frame0(h_pos == 12'd0 && v_pos == 12'd0), .il(il), .std(std),
-    .rec_valid(rec_valid), .rec_more(rec_more), .low_lat(ll), .pause(1'b0), .aanc(1'b0), .aanc_pts(33'd0), .rec_take(rec_take), .rec_end(rec_end), .rec_store(rec_store), .rec_frame(rec_frame),
+    .rec_valid(rec_valid), .rec_more(rec_more), .low_lat(ll), .pause(1'b0), .aanc(1'b0), .aanc_pts(33'd0), .aud_lead(lead), .rec_take(rec_take), .rec_end(rec_end), .rec_store(rec_store), .rec_frame(rec_frame),
     .rec_unpaired(rec_unpaired), .rec_first_bot(rec_first_bot), .rec_dec_t(rec_dec_t), .rec_dec_b(rec_dec_b),
     .rec_w_mbs(rec_w), .rec_hf_mbs(rec_hf), .rec_crop(rec_crop), .rec_aspect(rec_aspect), .rec_colour(3'd1), .rec_col_unsup(1'b0), .rec_col_tags(26'd0), .rec_siting(6'd0), .rec_timing_v(rec_timing_v), .rec_nuit(rec_nuit),
     .rec_ts(rec_ts), .rec_ps_a(rec_ps_a), .rec_ps_a_v(rec_ps_a_v), .rec_ps_b(rec_ps_b), .rec_ps_b_v(rec_ps_b_v),
@@ -149,7 +150,7 @@ integer r_dt [0:MAXR-1], r_db [0:MAXR-1], r_psa [0:MAXR-1], r_psav [0:MAXR-1], r
 longint r_pts [0:MAXR-1], r_ptsb [0:MAXR-1], r_nuit [0:MAXR-1], r_ts [0:MAXR-1];
 integer r_ptsv [0:MAXR-1], r_ptsbv [0:MAXR-1], r_tv [0:MAXR-1], r_w [0:MAXR-1], r_hf [0:MAXR-1];
 integer e_v [0:MAXK-1], e_s [0:MAXK-1], e_p [0:MAXK-1], e_f [0:MAXK-1], e_g [0:MAXK-1], e_l [0:MAXK-1];
-integer c_dc, c_pick, c_re, c_late, c_starve, c_cad, c_flags, c_skip, c_rate, c_lone, c_fhold, i_ll, i_std, i_il;
+integer c_dc, c_pick, c_re, c_late, c_starve, c_cad, c_flags, c_skip, c_rate, c_lone, c_fhold, i_ll, i_std, i_il, i_lead;
 
 task automatic load;
     integer fd, i, rc;
@@ -157,11 +158,12 @@ task automatic load;
     begin
         fd = $fopen({stem, ".stim"}, "r");
         if (fd == 0) `FAIL("harness", {"no ", stem, ".stim"})
-        rc = $fscanf(fd, "%d %d %d %d %d\n", n_rec, n_ref, i_ll, i_std, i_il);
-        if (rc != 5) `FAIL("harness", "bad .stim header (n_rec n_ref ll std il)")
+        rc = $fscanf(fd, "%d %d %d %d %d %d\n", n_rec, n_ref, i_ll, i_std, i_il, i_lead);
+        if (rc != 6) `FAIL("harness", "bad .stim header (n_rec n_ref ll std il lead)")
         // (P7) the expected refreshes differ by raster: the model's --il stem with +il, only
         if ((i_il != 0) !== il) `FAIL("harness", $sformatf("the .stim is for il %0d, the bench runs il %b", i_il, il))
         ll = (i_ll != 0);
+        lead = (i_lead != 0);
         std = i_std[1:0];
         for (i = 0; i < n_rec; i++) begin
             rc = $fscanf(fd, "%s", tagc);

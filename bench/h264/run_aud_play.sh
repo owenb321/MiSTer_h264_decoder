@@ -14,7 +14,9 @@
 #   dropped / repeated, the queue bounded); A8 the pause (silent, nothing taken, sync kept);
 #   A9 ATTEN 13 (every frame scaled, the gain computed in the bench from dB); A10 a stream
 #   reset with a fetch in flight (nothing of the old stream after it); A11 the clock starting
-#   100 ms after the audio's first frame (the late frames dropped before the gate opens).
+#   100 ms after the audio's first frame (the late frames dropped before the gate opens);
+#   (1.1) A12 the lead cleared by a late drop, A13 by an underrun; [lead] on every arm whose
+#   story fixes it (A1 high, A5Q high from the anchor, A11 / A6 / A7 never).
 #   Throughout: [hold] the
 #   read index held behind every record not wholly fetched, [credit] the 256-word sample FIFO
 #   never over-asked, [fetch] the requests walk the records in order, [rate] exactly 48 kHz.
@@ -28,7 +30,7 @@ fail=0
 red=0; [ "${1:-}" = "--red" ] && red=1
 RTL="h264/sfifo.sv h264/aud_gain.sv h264/aud_play.sv"
 TB="bench/h264/aud_play_tb.sv"
-ARMS="A1 A2 A3 A4 A5 A5Q A6 A7 A8 A9 A10 A11"
+ARMS="A1 A2 A3 A4 A5 A5Q A6 A7 A8 A9 A10 A11 A12 A13"
 
 echo "== the attenuation table =="
 if python3 tools/gen_aud_gain.py --check; then :; else fail=1; fi
@@ -112,6 +114,12 @@ PYEOF
   mut M16 $P "else if (ad_push && !f_run && d_count == 10'd0) h_pos <= ad_pos;" "" A1 "hold" &
   mut M17 $P "if (u_first && u_ptsv) begin hs_t <= {u_pts, 3'b000};" "if (u_first && u_ptsv && 1'b0) begin hs_t <= {u_pts, 3'b000};" A2 "sync|complete|hang" &
   mut M18 $P "if (hs_tv && far_late) gs <= G_DROP;" "if (1'b0) gs <= G_DROP;" A11 "sync|complete" &
+  # (1.1) THE LEAD: each term that sets or clears it, caught by its own arm
+  mut L1 $P "(gs == G_PLAY && ptick && hs_v && hs_tag && far_late) ||           // late: to G_DROP" "1'b0 ||" A12 "lead" &
+  mut L2 $P "if (q_rec == 9'd0 ||                                                  // ran dry" "if (1'b0 ||" A13 "lead" &
+  mut L3 $P "else if ((gs == G_ARM && hs_v && !pause && stc_run && hs_tv && !due) ||  // waiting for the clock" "else if (1'b0 ||" A1 "lead" &
+  mut L4 $P "                     aanc)                                                          // the audio anchor (sent last cycle)" "                     1'b0)" A5Q "lead" &
+  mut L5 $P "aud_lead <= lead && !ll && q_rec != 9'd0;" "aud_lead <= lead && q_rec != 9'd0;" A6 "lead" &
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

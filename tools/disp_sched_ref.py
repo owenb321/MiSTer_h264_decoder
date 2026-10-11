@@ -28,7 +28,11 @@ THE RULES (written from the spec and MiSTer_DVD's scheduler notes, not from the 
              (2 ticks) BEHIND the timeline, more than 0.5 s (45000) AHEAD of it, or
              more than 2.7 s (243000) late -- re-anchors STC to it (an untagged first
              head anchors at 0). Lateness below that is NOT a jump: a late picture is
-             simply shown at once (MiSTer_DVD's HW round B).
+             simply shown at once (MiSTer_DVD's HW round B). (Interface 1.1, docs/architecture.md
+             "Queued audio: a late picture never runs the clock back over it") while the audio
+             LEADS (aud_lead: the queued audio was written ahead of the clock and has neither run
+             dry nor come late since) lateness never anchors: the 2.7 s leg is gone, the other two
+             (and the first head's) stay. A scenario's records carry it as `lead`.
   lone PTS   (UMD fix/film-timing PR fj#25 + fix/lone-early PR fj#26, ported 2026-09-30; UMD
              docs/display.md S10, this tree's display.md S10) a TAGGED head more than half a
              refresh and at most 0.5 s AHEAD of the timeline or BEHIND it (HALF < |PTS - next|
@@ -176,7 +180,7 @@ def n_ticks(r):
     return 2, err
 
 
-def simulate(recs, n_refresh, n_store=20, ll=False, il=False):
+def simulate(recs, n_refresh, n_store=20, ll=False, il=False, lead=False):
     """recs: Rec list (store fields ignored: assigned here, lowest free at emission).
     Returns (per refresh [(valid, store, parity, field, single, late_pair)], counters, recs with stores).
     late_pair: the shown store is a field pair taken LATE (P7: at 480i it may be off its field --
@@ -260,7 +264,7 @@ def simulate(recs, n_refresh, n_store=20, ll=False, il=False):
             d_pic_next = pts_eff - next_pts
             d_stc_pic = s_e - pts_eff
             disc = tag and anchored and next_valid and (d_pic_next < -frame_t or d_pic_next > FWD_MAX
-                                                         or d_stc_pic > LATE_MAX)
+                                                         or (d_stc_pic > LATE_MAX and not lead))
             anchor_now = (not anchored) or (tag and (not next_valid or disc))
             due = anchor_now or ll or (s_e - want >= -HALF)
             late_raw = not anchor_now and not ll and prev_ok and (s_prev - want >= -HALF)
@@ -493,6 +497,11 @@ def scenario(name):
         for i in range(40, 80):
             r[i].avail = r[i].avail + 240
         return end_at(r), 520
+    if name == "heldlead":                        # (1.1) [8] with the audio leading: no re-anchor
+        r, n = scenario("held")
+        for x in r:
+            x.lead = 1
+        return r, n
     if name == "starve400":                       # [8b] a 400 ms starvation is NOT a re-anchor
         r = frames(100, [5, 4, 6, 3], P0, 12)
         for i in range(40, 100):
@@ -564,7 +573,7 @@ def _shift_pts(r, i0, new0):
 
 
 SCENARIOS = ("film32", "prog24", "prog24r", "tff", "bff", "fldmix", "ps78", "unpaired", "geom", "late", "back", "back200", "backfld", "gap03", "gap2s",
-             "fldlate", "held", "starve400", "llsteady", "llearly", "llburst", "llend",
+             "fldlate", "held", "heldlead", "starve400", "llsteady", "llearly", "llburst", "llend",
              # UMD's lone-PTS rules A and B (PR fj#25 + fj#26), and the band's edge at 50 Hz's half (900)
              "lone7", "lonefld", "lone2", "loneearly", "loneearlyfld", "back1s", "lone7@2",
              # P6 steps 5 / 6: the 60.00 Hz and 50 Hz rasters (their own content, and 59.94 content on them)
@@ -586,9 +595,10 @@ def main(argv=None):
     for i in range(1, len(recs)):
         recs[i].avail = max(recs[i].avail, recs[i - 1].avail)     # FIFO: availability is monotonic
     ll = any(getattr(r, "ll", 0) for r in recs)
-    out, cnt, recs = simulate(recs, n, ll=ll, il=a.il)
+    lead = any(getattr(r, "lead", 0) for r in recs)
+    out, cnt, recs = simulate(recs, n, ll=ll, il=a.il, lead=lead)
     with open(a.out + ".stim", "w") as f:
-        f.write("%d %d %d %d %d\n" % (len(recs), n, 1 if ll else 0, STD, 1 if a.il else 0))
+        f.write("%d %d %d %d %d %d\n" % (len(recs), n, 1 if ll else 0, STD, 1 if a.il else 0, 1 if lead else 0))
         for r in recs:
             f.write(r.line() + "\n")
     with open(a.out + ".exp", "w") as f:
