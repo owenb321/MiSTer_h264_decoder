@@ -346,6 +346,16 @@ TV), 720p at 120 Hz, 1080p fine. `sys/sys.tcl` pins the PLL and its counter, `to
 report (fatal on `--release`), `tools/mister.py hdmi` measures the real clock. Fit SEED 5 101.77 / 101.58 PASS
 (`H264_hdmi480sweep_20261011_1951.rbf`); on .201 27.000 / 74.250 / 148.500 MHz. **✅ MERGED (PR #12)**, verified on .201
 (the clock measured). DVD / UMD have the same exposure (not hit: `harvest.md`). Released 1.0.0 (SEED 12) is not affected.
+**Analog Aspect Fit, the anamorphic 16:9 fit (issue #11, `fix/fit-anamorphic`, 2026-10-11; `docs/analog.md` §5a,
+`history.md` §48)** 🔧: Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at 1.78:1 (a
+2.37:1 film 25 % too tall). Now Letterbox for a 16:9 display -- wider letterboxed (`oh = round(rh 16B / 9A)` through A''s
+normalised quotient, `lb` 0), narrower pillarboxed (`ow = round(405 A / B)`; 4:3 pillarboxed and HDMI Auto 16:9 under Fit:
+the maintainer's choices), the native snap as Letterbox's (mine, recorded). Fill (mode 3) unchanged; the benches' "raster
+filled" cases moved to mode 3 with no display (goldens byte-identical to main's). `run_disp_fit.sh --red` (F33-F38),
+`run_disp_reader.sh` (`fit_scope` / `fit_43`), `run_vid_equiv.sh`, `run_scaffold.sh --red` (W111) GREEN. Fit SEED 5 first
+roll MARGINAL 100.45 / 98.98 (93 % ALM), a sweep for a passing seed; on .201 under Fit at 480i 720x304 -> 720 x 360,
+640x480 -> 540 x 480, 848x480 -> 716 x 480, HDMI 16 : 9, errors 0; Fill unchanged. ⏳ A passing seed; the maintainer's eye
+on a TV in its wide mode; no interface change.
 ---
 
 ## Documentation discipline (read before starting work)
