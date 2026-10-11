@@ -531,6 +531,30 @@ def cmd_feed(args):
     return rc
 
 
+def cmd_hdmi(args):
+    """The HDMI output as the ADV7513 transmitter sees it (docs/history.md S47): the TMDS clock it
+    measures for HDMI audio (CTS = f_pix x N / (128 fs): with Main's N, 6144 at 48 kHz or 12288 at
+    96 kHz, the CTS in kHz IS the pixel clock) and the VIC it detects. The detected VIC comes from the line / pixel counts alone: it
+    read 480p60 while the clock was 135 MHz (a 300 Hz signal) -- trust the clock, not the VIC."""
+    rc, out = ssh('''
+r() { i2cget -y 1 0x39 $1; }
+n=$(( ($(r 0x01) & 0xf) << 16 | $(r 0x02) << 8 | $(r 0x03) ))
+c=$(( ($(r 0x04) & 0xf) << 16 | $(r 0x05) << 8 | $(r 0x06) ))
+v=$(r 0x3e); s=$(r 0x3d)
+echo "$n $c $((v >> 2)) $((s & 0x3f)) $(cat /tmp/CORENAME 2>/dev/null)"
+''', check=False)
+    try:
+        n, cts, vic, sent, core = out.split()[:5]
+        n, cts = int(n), int(cts)
+    except ValueError:
+        print(out.rstrip())
+        return 1
+    fs = 96 if n == 12288 else 48                       # kHz: hdmi_audio_96k=1 sends N 12288
+    mhz = cts * 128 * fs / n / 1000 if n else 0.0
+    print(f'hdmi: {mhz:.3f} MHz pixel clock (N {n}, CTS {cts}); VIC detected {vic}, sent {sent}; core {core}')
+    return rc
+
+
 def cmd_stat(args):
     for i in range(max(1, args.count)):
         rc, out = ssh(f'{BIN_DIR}/h264stat --json\n', check=False)
@@ -604,6 +628,9 @@ def main():
     p.add_argument('--scaled', action='store_true',
                    help="the scaler's output (shows the aspect), not the raw raster")
     p.set_defaults(fn=cmd_shot)
+
+    sub.add_parser('hdmi', help="the HDMI pixel clock the ADV7513 measures, and its detected VIC") \
+       .set_defaults(fn=cmd_hdmi)
 
     for name, fn in (('state', cmd_state), ('options', cmd_options)):
         sub.add_parser(name).set_defaults(fn=fn)

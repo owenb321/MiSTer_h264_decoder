@@ -193,6 +193,20 @@ and the pump's FSM is serial, so writes continuing proves its reads complete.
 > you the mechanism is present. Prove liveness by a different route before reporting
 > "free".**
 
+### 4.7 A PASS fit that sends the wrong HDMI clock (H264, 2026-10-11)
+
+Three fits of three different branches closed timing, passed every gate and showed 1080p perfectly. At
+720x480 the TV was black. `pll_hdmi`'s output had been placed on a physical counter that Main never
+reprograms, so only the VCO followed the mode. 720x480 left at 135 MHz, and 720p at 148.5 MHz: a 120 Hz
+signal that a 4K TV happily showed (`history.md` §47). Nothing in the build could see it, since the timing
+analysis knows only the compiled 148.5 MHz. The transmitter's own detected VIC read "480p60" for the
+300 Hz signal, because it counts lines and pixels and not time.
+
+> **RULE. Logic that is reconfigured at run time is outside the fitter's view: pin what the run-time
+> writer addresses (here the PLL's site and output counter, `sys/sys.tcl`) and gate the fit report for it
+> (`tools/hdmi_pll_check.sh`). On the rig, measure the quantity itself (the ADV7513's CTS: `mister.py
+> hdmi`), not a classifier derived from it.**
+
 ---
 
 ## 5. Timing technique that worked

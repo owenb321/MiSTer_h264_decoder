@@ -37,6 +37,7 @@ saved settings restored, the menu reloaded if our core is running).
 | `mister.py shot -o FILE` | screenshot of the core's raw raster |
 | `mister.py shot --scaled -o FILE` | the scaler's output: the width shows the aspect the core reports |
 | `mister.py options` | every OSD option, derived from the RTL |
+| `mister.py hdmi` | the HDMI pixel clock the ADV7513 measures (its audio CTS) and the VIC it detects |
 | `mister.py shell -- <cmd>` | run a command on the target |
 
 **Feeding a stream** (Phase 3): build the ARM binaries (`USE_DOCKER=1 hps/build_arm.sh`),
@@ -76,6 +77,12 @@ telemetry: no HIL Main (decided 2026-09-27). `docs/hil_harness.md` "Feeding a st
   the port hung. A reboot clears it -- the maintainer's call.
 - **Ask "is the PICTURE frozen or is the MACHINE frozen?"** The idle marker moves every
   frame precisely so one pair of shots answers it.
+
+- **A black HDMI screen on one build and not another: measure the pixel clock (`mister.py hdmi`).**
+  The ADV7513's detected VIC reads only line / pixel counts: it said 480p60 while a build sent 720x480
+  at 135 MHz (a 300 Hz signal), because the fit had put `pll_hdmi`'s output on a counter Main never
+  reprograms (`docs/history.md` §47). The CTS is the real clock. Change `video_mode` in `MiSTer.ini` and
+  reload the core: Main re-reads the ini at each core load, so no reboot is needed.
 
 ## Before believing a finding
 

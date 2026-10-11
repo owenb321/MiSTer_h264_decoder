@@ -761,6 +761,12 @@ here. Numbers quoted are from THOSE netlists.
   Quartus by the Docker container name; the MiSTer has no `pkill`.
 - **Check the polarity of any active-low signal shown as a flag** before concluding a
   watchdog is firing.
+- **A PASS fit can send the wrong HDMI clock** (2026-10-11, `history.md` §47): Main retunes
+  `pll_hdmi` by rewriting its physical C counter 0. Three SEED 2 fits put the output on another
+  counter: 1080p fine, 720x480 at 135 MHz (a black TV), 720p at 120 Hz. `sys/sys.tcl` pins the
+  counter, `tools/hdmi_pll_check.sh` gates every fit report (fatal on `--release`), and
+  `tools/mister.py hdmi` measures the real clock (the ADV7513's CTS; its detected VIC cannot see
+  the clock).
 
 ---
 
