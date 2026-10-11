@@ -155,13 +155,15 @@ int main(int argc, char **argv)
     { struct h264ring_backend be; h264ring *x; memset(&be, 0, sizeof be); be.ctrl = ctrl; be.ring = ringmem;
       be.ring_size = RING; CHECK("attach: no magic -> ENODEV", h264ring_attach(&x, &be) == -ENODEV); }
     core.alive = 1; core_status();
-    /* (1.0) the version rule: the same major, the core's minor at least the library's */
+    /* (1.0) the version rule: the same major, the core's minor at least the library's (1.1 since
+     * 2026-10-10: a 1.0 core lacks 1.1's guarantee, docs/architecture.md "Queued audio: ...") */
     { static const struct { uint32_t v; int ok; const char *what; } vt[] = {
           { 0x0011, 0, "attach: a 0.17 core -> EPROTONOSUPPORT" },
           { 0x0200, 0, "attach: a 2.0 core -> EPROTONOSUPPORT" },
-          { 0x0100, 1, "attach: a 1.0 core" },
-          { 0x0101, 1, "attach: a 1.1 core serves a 1.0 program" },
-          { 0x01FF, 1, "attach: a 1.255 core serves a 1.0 program" } };
+          { 0x0100, 0, "attach: a 1.0 core refused by a 1.1 program -> EPROTONOSUPPORT" },
+          { 0x0101, 1, "attach: a 1.1 core" },
+          { 0x0102, 1, "attach: a 1.2 core serves a 1.1 program" },
+          { 0x01FF, 1, "attach: a 1.255 core serves a 1.1 program" } };
       for (unsigned i = 0; i < sizeof vt / sizeof vt[0]; i++) {
           struct h264ring_backend be; h264ring *x = NULL; int rc;
           ctrl[1] = (ctrl[1] & ~0xFFFFull) | vt[i].v;

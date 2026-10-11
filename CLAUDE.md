@@ -332,8 +332,14 @@ audio stream the probe missed played, every record timed; a larger probe measure
 `--red` (Jellyfin (v) / (w), the player (x) / (y), fixtures by `tools/ts_skew.py`), the manual's `integrating/audio.md` "keep
 the audio within about a second"; no RTL beyond `dev-jftranscode` (no fit); **on .201 with the maintainer's film, control
 arm first** (`history.md` §45: 1.0.0's client froze and played two opens silent; this one clean on every open). The core's
-livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): designed; the go
-given 2026-10-10, its own branch next. 91 % ALM, 9 DSP left.
+livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): **interface 1.1,
+✅ MERGED (PR #10)** (the go given 2026-10-10): no lateness re-anchor while the queued audio leads (it waited
+for the clock or started it, and has neither run dry nor come late since: `aud_play`'s `aud_lead` -> `disp_sched`); the
+layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core). Benches GREEN and `--red`; fit SEED 4
+103.8 / 102.73 PASS (`H264_audclocksweep_20261011_0503.rbf`); on .201 (`history.md` §46) a 10 s audio lead stuck the 1.0
+core and plays on 1.1, and 1.0.0's Jellyfin client plays the film's freezing open (one re-anchor after its queue ran dry;
+6 on 1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN; ✅ HW-CONFIRMED 2026-10-11 (the maintainer's round on .201 with
+the fixed clients: "all tests look good"). 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

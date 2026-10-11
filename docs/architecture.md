@@ -229,6 +229,12 @@ manual's `integrating/interface.md` "Versions" is their user-facing form, normat
 - *Consequence for older text*: the 0.14 fallback "on an older core" in `h264ring_video_out()` and 0.11's
   word 81 fallback were unreachable under the exact check and stay so (a 1.x library never attaches below
   1.0); they guard only a status read before the core's first frame, or a 0 no 1.x core writes.
+**Version 1.1 (2026-10-10, the maintainer: "let's do part b now"; roadmap "A transcode with no audio, and
+a freeze"):** the 1.0 layout, unchanged; a behaviour. While a paced stream's queued audio leads (it waited
+for the clock or started it, and has neither run dry nor come late since), a late picture no longer
+anchors the clock back over it ("Queued audio: a late picture never runs the clock back over it", below).
+Word 1 `0x0101`, the library's version 0x0101: a 1.1 program refuses a 1.0 core, a 1.0 program runs on a
+1.1 core. `hps/tests/test_ring.c`'s matrix: 1.0 refused, 1.1 / 1.2 / 1.255 accepted.
 The heading keeps "v0.1": other documents cite it by name. The layout lives in ONE table, `tools/ring_layout.py`, which generates the RTL's
 constants and status muxes (`h264/ring_iface.svh`, `h264/ring_words_{sys,mem,dec}.sv`) and
 the client library's header (`hps/include/h264ring_layout.h`); `--check` fails on drift
@@ -641,7 +647,7 @@ it arrives against a queue target:
   tolerance.
 Parameters in the RTL, recorded here; a program cannot set them in 0.5.
 
-### Queued audio: a late picture never runs the clock back over it (designed 2026-10-10; NOT BUILT, awaiting the maintainer)
+### Queued audio: a late picture never runs the clock back over it (interface 1.1, 2026-10-10)
 
 **The defect** (`jellyfin.md` §12; .201, 2026-10-09, reproduced 2026-10-10 with 1.0.0's client: `history.md`
 §45). A transcode's TS put the audio more than 5 s ahead of the video, and the client wrote it in that
@@ -672,9 +678,10 @@ the STC is right and the pictures are what is late. Moving the clock back to a l
 makes that audio early, and early queued audio holds the parser (the FIFO) or the program (the read
 index): no picture behind it can arrive on time again.
 
-**Proposed rule (B1).** On a paced stream (not LOW_LATENCY), **while audio is queued and on time** --
-`aud_play`'s gate playing (`G_PLAY`), or armed with a head whose time is at or after the STC (waiting
-for it) -- **a picture's lateness does not anchor the clock**:
+**The rule (interface 1.1; the go given 2026-10-10, the maintainer: "let's do part b now").** On a
+paced stream (not LOW_LATENCY), **while the queued audio LEADS -- it waited for the clock or started
+it, and has neither run dry nor arrived late since -- a picture's lateness does not anchor the
+clock**:
 - `disp_sched` drops the `LATE_MAX` leg from `disc` and from `far`;
 - the picture is shown at once, as any late picture (lateness is not a discontinuity), and counted in
   `disp_late`;
@@ -682,37 +689,52 @@ for it) -- **a picture's lateness does not anchor the clock**:
   past `FWD_MAX`, a picture `FWD_MAX` ahead of an audio-started clock. They follow the stream's own
   timestamps, not its starvation.
 
+Put the other way round: **a late picture moves the clock back only if the audio has run dry or come late
+since it last waited ahead.** At a healthy stream's start the first record waits for the first picture's
+time, so the flag is set for the whole film; a stall clears it.
+
+**The flag** (`aud_lead`, `h264/aud_play.sv`, registered, clk_sys):
+- *set* when the gate is armed with a timed head not yet due and the clock running (the audio waits for
+  the STC), and when the audio anchor starts the clock (`aanc`: audio waiting with no picture is the
+  "written ahead" case too; without it the start-of-stream `far` case would take one back-step first);
+- *cleared* when the queue is empty (the audio ran dry: a stall drains the ring; an underrun with records
+  still queued is only a fetch behind, and keeps it), by a late drop (the gate to `G_DROP`: a record past
+  `SLIP` late), and by the stream's reset;
+- *gated* to 0 on a LOW_LATENCY stream (its clock is not the audio's reference).
+
+A single misstamped record more than 10 ms late clears it, and buys one back-step at most before the next
+early wait sets it again: tolerable, and never a livelock.
+
+**Why not "the audio on time"** (the merged first draft: the gate playing, or armed with an early head).
+A stall's resumed audio is late, but its late frames are dropped one a cycle. The gate is back in
+`G_PLAY`, on time against the STC, before the late picture behind it is even decoded. "On time" would then
+have suppressed the stall's re-anchor as well, leaving the stall's lag as lip-sync error. What tells the two
+apart is the audio's history: in the freeze it had waited ahead and never ran dry. **Both traces show it:**
+from the audio's first early wait through all 15 re-anchors (control arm 6, 2026-10-09 15), `aud_underruns`
+and `aud_late` did not move.
+
 With the rule, in the freeze, the STC runs forward only and reaches the waiting audio, which plays.
 That frees the FIFO, then the read index, and the parser and the program go on. The video behind the
 audio arrives (lead - 5.12 s) late and is shown late. The film plays with its picture that far behind its
 sound, `disp_late` counting every picture: wrong and visible, but not stuck. A program that keeps its
 audio within a second never gets there.
-- *Why it ends:* while the audio waits, only the pictures already downstream (the DPB, the display
-  queue) can reach `disp_sched`. Under B1 none of them anchors for lateness, and a timeline anchor (a
-  timestamp jump) fires at most once each. After them the STC only counts up and reaches the head, and
-  the queue plays out at 48 kHz.
-- *Why not a fill level* (the first draft: "within 8 records of full"): the ring gate's re-anchors came
-  with `aud_q_rec` 45 down to 3 (phase 2). A fill-level rule would have let more than half of them
-  through.
-- *Why not "any audio queued":* a network stall starves both streams.
-  - When the data comes back, the audio queued with the late pictures is late too: its gate drops its
-    late frames (`G_DROP`), or the queue ran dry (an underrun, armed with no head).
-  - There the old recovery is the better one: the late picture re-anchors, the resumed audio is on time
-    against it, and sound and picture are in sync at once.
-  - Suppressing it whenever audio is queued would leave the stall's lag as lip-sync error until the
-    decoder caught up (3 s at 1.13x: ~23 s).
-  - B1 tells the two apart by the audio's own state: on time (the program wrote it ahead, the clock is
-    right) or late or absent (everything starved).
-- *The signals:* in `aud_play` (clk_sys), registered,
-  `aud_ontime = !ll && !aud_idle && (gate == G_PLAY || (gate == G_ARM && head_valid && head_t >= stc))`.
-  It goes into `disp_ctl` and `disp_sched` (clk_sys too: no crossing) as a level, used in the decide stage
-  (ev[3]). Cost: one input, a 36-bit compare (the head's eighth-tick time against the STC) and two AND
-  terms; no M10K, no DSP. `tools/disp_sched_ref.py` gains the same input. At a refresh the level may be a
-  few cycles stale against the eval; one refresh late either way only moves one decision.
-- *The interface:* no word or field moves or changes meaning, so this is a minor's behaviour change.
-  Proposed **1.1** (word 1 `0x0101`), so a program can tell whether the core it runs on has the guarantee;
-  1.0's library attaches to it (minor >= its own). The manual's `integrating/audio.md` then says it in
-  "How the core plays it", and drops "it can stay stopped until your program flushes the stream".
+- *Why it ends:* while the audio leads, only the pictures already downstream (the DPB, the display queue)
+  can reach `disp_sched`. None of them anchors for lateness, and a timeline anchor (a timestamp jump)
+  fires at most once each. After them the STC only counts up and reaches the head, and the queue plays out
+  at 48 kHz.
+- *Why not a fill level* (an earlier draft: "within 8 records of full"): the ring gate's re-anchors came
+  with `aud_q_rec` 45 down to 3 (phase 2). A fill-level rule would have let more than half of them through.
+- *A slow decoder* (a stream past the decoder's rate): the parser reads the ring only as fast as the
+  decoder takes video, so the audio behind it in the ring arrives slower than it plays and runs dry. The
+  flag clears, and the late pictures re-anchor as in 1.0 (the stream falls behind visibly, as before).
+- *The wiring:* `aud_play.aud_lead` -> `disp_ctl.aud_lead` -> `disp_sched.aud_lead`, all clk_sys (no
+  crossing), sampled at the eval (`lead_q`) and used in the decide stage (ev[3]): `lat = (d_stc_pic >
+  LATE_MAX) && !lead_q`, `disc = ... || lat`, `far = lat || (d_stc_pic < -FWD_MAX)`. Cost: a flop, a few
+  terms; no M10K, no DSP. `tools/disp_sched_ref.py` models it (a scenario's records carry `lead`).
+- *The interface:* no word or field moves or changes meaning: **1.1** (word 1 `0x0101`, the library's
+  version too, `tools/ring_layout.py`). A program built for 1.1 may rely on the rule, so it refuses a 1.0
+  core (the documented rule: the core's minor >= the library's); a 1.0 program runs on a 1.1 core.
+  `integrating/audio.md` says it in "How the core plays it".
 
 **Alternatives, for the maintainer.**
 - **B2, the parser skips audio at the FIFO gate while the display starves** (the AUDIO record dropped,
@@ -727,20 +749,29 @@ audio within a second never gets there.
   - It complements B1 and does not replace it: a lead past the FIFO, or past the ring, must still not
     stick.
 
-**Gates, when built.**
-- A `run_disp_sched.sh` scenario (and `disp_sched_ref.py`): `aud_ontime` high while pictures arrive 3 s
-  late, the STC monotonic, `disp_reanchor` unchanged, every picture shown. And `aud_ontime` low with the
-  same pictures (the stall): the re-anchor as today. Under `--red`, the suppression removed must go RED in
-  the first, and the suppression made unconditional must go RED in the second.
-- `aud_play_tb`: `aud_ontime` per gate state (playing, armed early, armed with no head, dropping, LOW
-  LATENCY).
-- `run_ring_rd.sh` / `run_cosim.sh` (the ring mode, a 6 s audio lead through the real parser and
-  `aud_play`): the stream plays to its END.
-- The fit (an RTL change).
-- The rig, control arm first. `h264play --pcm FILE --pcm-lead 6000` writes the audio 6 s ahead, as the
-  server did. It should reproduce the freeze on main's build and play (late) on this one, and the
-  Jellyfin client's control arm (`history.md` §45: 1.0.0's client, the same film and opens) should play
-  as well. The logger's `disp_reanchor` / `aud_state` / `aud_q_rec` / `disp_late` are the readings.
+**Gates.**
+- `run_disp_anc.sh` (`disp_sched` directly, the audio anchor's bench): X7 the audio-started clock, a picture
+  3 s behind with the lead -- taken, not anchored; X8 a late picture contiguous on the timeline (disc's
+  lateness leg) with it -- not anchored; X9 the same without it (a stall) -- re-anchors; X10 with it, a jump
+  past `FWD_MAX` -- re-anchors. `--red` N6 / N6b (the lead ignored) -> X7 / X8, N7 (the lateness leg gone
+  whatever the audio) -> X9, N8 (the lead suppressing the timeline's legs) -> X10.
+- `run_aud_play.sh` (`aud_play_tb`'s `[lead]`, scored on every frame played from what the bench saw happen):
+  A1 high (the audio waited), A5Q high (the anchor), A11 / A6 / A7 never (no wait; low latency, with a
+  running clock and records ahead of it), A12 cleared by a late drop, A13 by an underrun (and untimed
+  audio after it does not re-set it). `--red` L1-L5, one per term (an underrun's own clear was dropped as redundant with the queue empty: no
+  bench could tell them apart).
+- `run_disp_sched.sh` `heldlead` (the `held` scenario with the lead: no re-anchor, its 40 delayed pictures
+  shown late), against the model; `--red` D27 (the lead ignored) -> heldlead. `held` and the other
+  scenarios unchanged (the lead 0).
+- No bench runs `aud_play` and the display together (the cosim's ring mode ties the audio off): the
+  end-to-end proof is the rig.
+- The fit: SEED 4 103.8 / 102.73 PASS (`history.md` §46).
+- **The rig** (`history.md` §46), control arm first. `h264play --pcm-lead 6000` does NOT stick a 1.0 core:
+  its pictures are only ~0.9 s late (6 - 5.12 s), under `LATE_MAX`. A lead past ~8 s does: **`--pcm-lead
+  10000` stuck the 1.0 core** (3 access units, 2 re-anchors, the program's write timed out) **and plays to
+  its end on 1.1** (0 re-anchors, every picture ~4.9 s late, no silence). 1.0.0's Jellyfin client with the
+  film's freezing open plays on 1.1 (73 s of clock in 76 s, against 21 s in 60 s on 1.0); its one later
+  re-anchor followed the audio running dry, the stall rule.
 
 ### The pause and volume word (program word 34, a u32)
 

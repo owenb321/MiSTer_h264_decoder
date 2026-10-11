@@ -35,6 +35,14 @@
 // the ring's read index, could wedge a program that cannot write the video behind it. The first
 // picture after it is SCHEDULED against the running clock, not anchored on it, unless it is
 // more than FWD_MAX ahead of the STC or LATE_MAX behind it (the bounds a later picture has).
+// THE AUDIO'S LEAD (interface 1.1; docs/architecture.md "Queued audio: a late picture never runs the
+// clock back over it"): while `aud_lead` is high (h264/aud_play.sv: the queued audio was written ahead of
+// the clock and has neither run dry nor arrived late since), a picture's LATENESS does not anchor -- the
+// LATE_MAX leg drops out of `disc` and of `far`; the picture is shown at once, late, as any late picture.
+// The timeline's legs (a picture behind the timeline, a jump past FWD_MAX, FWD_MAX ahead of an
+// audio-started clock) keep anchoring. Moving the clock back behind waiting audio is what fed the
+// 2026-10-09 livelock: the audio, early again, held the parser (256 records) or the read index (a full
+// ring), so every picture that still came was late and moved it back again. Sampled at eval.
 // THE PAUSE (0.5): disp_ctl withholds `tick` (the STC stands still) and the eval / pickup.
 // A LONE PTS (UMD fix/film-timing PR fj#25 + fix/lone-early PR fj#26, ported 2026-09-30; UMD
 // docs/display.md S10, this tree's docs/display.md S10): a tagged head more than half a refresh
@@ -70,6 +78,7 @@ module disp_sched #(
     input  wire         ext_anc,           // (0.5) one clk: the audio starts the STC (ignored once anchored)
     input  wire  [32:0] ext_pts,
     input  wire  [10:0] half,              // half a refresh, in ticks: 750 (59.94 / 60.00 Hz), 900 (50 Hz) -- P6 §10
+    input  wire         aud_lead,          // (1.1) the queued audio is ahead of the clock: no lateness anchor
     // the head of the queue (stable from eval to pickup)
     input  wire         head_valid,        // a picture record, prepared
     input  wire         head_tag,          // it carries a PTS (pts_eff valid)
@@ -106,19 +115,19 @@ module disp_sched #(
     logic signed [33:0] d_prev_want;
     logic [32:0] want;
     logic signed [33:0] d_pic_next, d_stc_pic, d_stc_want, d_stc_next;
-    logic        hv_q, tag_q;
+    logic        hv_q, tag_q, lead_q;
     logic        tag_e;                    // tag_q, unless disbelieved (ev[1])
     logic        susp;                     // the previous tag taken was disbelieved
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             ev <= '0; s_e <= '0; want <= '0; d_pic_next <= '0; d_stc_pic <= '0; d_stc_want <= '0; d_stc_next <= '0;
             s_prev <= '0; prev_run <= 1'b0; prev_ok <= 1'b0; re_anch <= 1'b0; d_prev_want <= '0;
-            hv_q <= 1'b0; tag_q <= 1'b0; tag_e <= 1'b0; lone <= 1'b0;
+            hv_q <= 1'b0; tag_q <= 1'b0; lead_q <= 1'b0; tag_e <= 1'b0; lone <= 1'b0;
             due <= 1'b0; anchor_now <= 1'b0; late <= 1'b0; contig <= 1'b0; next_due <= 1'b0;
         end else begin
             ev <= {ev[2:0], eval};
             if (eval) begin
-                s_e <= stc; hv_q <= head_valid; tag_q <= head_tag;
+                s_e <= stc; hv_q <= head_valid; tag_q <= head_tag; lead_q <= aud_lead;
                 s_prev <= s_e; prev_ok <= prev_run && !re_anch;
                 prev_run <= anchored; re_anch <= 1'b0;
             end
@@ -145,13 +154,13 @@ module disp_sched #(
             end
             if (ev[3]) begin : decide
                 logic disc, an;
-                logic far;
+                logic far, lat;
+                lat  = (d_stc_pic > LATE_MAX_TICKS) && !lead_q;        // (1.1) not while the audio leads
                 disc = tag_e && anchored && next_valid &&
-                       ((d_pic_next < -$signed({11'd0, head_frame_t})) || (d_pic_next > FWD_MAX_TICKS) ||
-                        (d_stc_pic > LATE_MAX_TICKS));
+                       ((d_pic_next < -$signed({11'd0, head_frame_t})) || (d_pic_next > FWD_MAX_TICKS) || lat);
                 // (0.5) anchored with no timeline: only the audio anchor leaves that state (a
                 // picture's anchor sets next_valid); the picture is scheduled unless far off
-                far = (d_stc_pic > LATE_MAX_TICKS) || (d_stc_pic < -FWD_MAX_TICKS);
+                far = lat || (d_stc_pic < -FWD_MAX_TICKS);
                 an = hv_q && (!anchored || (tag_e && (next_valid ? disc : far)));
                 anchor_now <= an;
                 due        <= hv_q && (an || ll || (d_stc_want >= -HALF_SCAN));

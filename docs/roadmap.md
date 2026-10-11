@@ -962,7 +962,7 @@ the identity").
 - Later: the PICTURE record's siting (an interface 1.x minor, with the siting / malformed-VUI telemetry);
   chroma under the Area pre-filter.
 
-## A transcode with no audio, and a freeze (found 2026-10-09, the maintainer testing 1.0.0) -- the client ✅ MERGED (PR #9), verified on .201; Part B next
+## A transcode with no audio, and a freeze (found 2026-10-09, the maintainer testing 1.0.0) -- the client ✅ MERGED (PR #9); the core (1.1) ✅ MERGED (PR #10); both ✅ HW-CONFIRMED 2026-10-11
 
 `docs/jellyfin.md` §12, `history.md` §45.
 - [x] The client (`clients/common/player.c`, both FFmpeg clients): the audio held to ~1 s ahead of the
@@ -972,10 +972,18 @@ the identity").
       fixtures come from `tools/ts_skew.py`.
 - [x] On .201, control arm first: 1.0.0's client froze and played two opens silent; this branch played
       all four opens with audio and no re-anchor.
-- [x] Merged (PR #9). ⏳ The maintainer's own round on the film.
-- [ ] **The core's livelock (Part B), designed only** (`architecture.md` "Queued audio: a late picture
-      never runs the clock back over it"): no lateness anchor while queued audio is on time; proposed as
-      interface 1.1. **Go given 2026-10-10 (the maintainer: "let's do part b now")**; alternatives B2 / B3 there.
+- [x] Merged (PR #9). ✅ HW-CONFIRMED 2026-10-11 (the maintainer's round on .201, with the 1.1 core: `history.md` §46).
+- [x] **The core's livelock (Part B), interface 1.1** -- ✅ MERGED (PR #10), ✅ HW-CONFIRMED 2026-10-11 (`architecture.md` "Queued
+      audio: a late picture never runs the clock back over it"). Go given 2026-10-10 (the maintainer: "let's
+      do part b now"). The rule, refined while building (the audio's history, not its state, tells the
+      freeze from a stall): no lateness anchor while the queued audio LEADS (waited for the clock or started
+      it, neither ran dry nor came late since). Built: `aud_play`'s `aud_lead`, `disp_sched`'s `lat`, the
+      layout's version 1.1; benches `run_disp_anc.sh` X7-X10, `run_aud_play.sh` `[lead]` A12 / A13,
+      `run_disp_sched.sh` heldlead, all GREEN and `--red`; fit SEED 4 103.8 / 102.73 PASS; **on .201** (control
+      arm first, `history.md` §46): an audio lead of 10 s stuck the 1.0 core and plays to its end on 1.1, and
+      1.0.0's Jellyfin client plays the film's freezing open, with one re-anchor after its queue ran dry (6 on
+      1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN (43 mutations). The maintainer's round on .201
+      (2026-10-11): "all tests look good". Merged (PR #10).
 
 ## Phase 7 — For integrators
 

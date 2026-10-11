@@ -28,8 +28,10 @@ without one continues from the one before it. The library's
   gives you is usually right. But 256 records of 20 ms are only 5.12 s. Some sources put their
   audio further ahead than that in the stream (a server's live transcode after a seek has been
   seen 6 s ahead). If you write them in that order, the core stops reading with the video
-  behind that audio still unread. The picture stops, and with the core as it is today it can
-  stay stopped until your program flushes the stream. So hold such audio back: write an AUDIO
+  behind that audio still unread, and that video arrives late: by how far the audio leads past
+  those 5.12 s (a 6 s lead alone leaves it under a second late). A 1.1 core keeps playing (below),
+  but the picture is then behind the sound for as long as the audio stays that far ahead, and a
+  1.0 core could stop the picture altogether. So hold such audio back: write an AUDIO
   record only when its time is at most about one second past the newest video access unit you
   have written. Let the audio through when no more video is coming (the stream's end, or a
   stretch with no video).
@@ -56,6 +58,13 @@ the ring's size, as always (the library does).
   Within 10 ms it plays on seamlessly, so timestamps rounded to the millisecond (Matroska)
   never cause either.
 - If the audio runs dry, silence plays and the next record's time sets the phase again.
+- **A late picture and the clock (1.1).** A picture more than 2.7 s late normally moves the
+  clock back to it, so that picture and sound line up again after a stall. **Except while the
+  queued audio is ahead of the clock**: it waited for its time (or started the clock) and has
+  neither run dry nor arrived late since. Then the audio is right and the picture is what is
+  late, so the picture is shown at once, late, and counted in `disp_late`, and the clock runs on.
+  (On a 1.0 core, moving the clock back behind waiting audio could stop the picture for good:
+  the audio, early again, kept the core from reading the video behind it.)
 
 **A stream with LOW_LATENCY** (a game stream) is played as it arrives: the core starts when
 it has 20 ms of audio queued and then keeps the queue's low point between 2.5 and 20 ms by
@@ -65,13 +74,6 @@ at once (a network stall delivering its backlog) is dropped down to 20 ms. Audio
 trails the picture by roughly 10 to 40 ms, inside what viewers perceive as in sync. The
 mode is the stream's, taken from its first access unit's LOW_LATENCY flag; audio sent
 before the first access unit is paced.
-
-!!! note "Not yet implemented: a full audio queue never stops the picture"
-    A planned 1.x core changes one rule. While the queued audio is on time -- playing, or waiting
-    for its time -- a late picture no longer moves the clock back. The clock runs on, the queued
-    audio plays, and the core reads on.
-    Video that came behind the audio is shown late, and counted, but the picture keeps moving.
-    Until then, keep your audio within a second of your video (above).
 
 **Everything is counted** in the status block (words 40-45, see
 [The interface](interface.md#the-control-block)): the audio's state, the queue, frames

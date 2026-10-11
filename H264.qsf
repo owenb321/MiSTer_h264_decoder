@@ -375,6 +375,15 @@
 #     99.98/96.79 MARGINAL, clk_vid 94.53/93.59 PASS (H264_chroma_MARGINAL_20261010_1710.rbf); sweep (detached):
 #     12 100.51/100.35, 13 102.3/100.92, **SEED 2 102.15/102.45 PASS**, clk_vid 96.94/91.46 PASS; ALM 39,040 (93 %),
 #     RAM 421, DSP 109, H264_chromafull_20261010_1752.rbf (a83a388). SEED 2 pinned.
+#   2026-10-11 (interface 1.1, feature/aud-clock: aud_play's aud_lead -> disp_sched, a late picture never anchors
+#     behind leading audio; clk_sys logic): 30a71bf SEED 2 first roll 102.32/99.05 MARGINAL (the cold corner),
+#     clk_vid 99.31/94.49 PASS, clk_mem 96.2/95.95 (ungated); ALM 39,024 (93 %), RAM 421, DSP 109,
+#     H264_audclock_MARGINAL_20261011_0249.rbf. Sweep (detached), all MARGINAL: 5 100.74/101.85, 13 98.17/97.64,
+#     6 99.93/98.94, 3 100.41/98.31, 12 99.97/101.17, 7 100.66/100.98, 9 102.0/100.98, 1 95.75/95.79 -- the census
+#     (SEED 1, -40 C, slack < 0.51): recon_inter 28 (kb -> q_n: a 5x5 product in LUTs), recon_hdr 16, recon_mb 10,
+#     recon_dpb 2 -- the decoder's own paths, re-placed by the netlist change. Second sweep (detached): **SEED 4
+#     first, 103.8/102.73 PASS**, clk_vid 92.04/88.43 PASS; ALM 39,014 (93 %), RAM 421, DSP 109,
+#     H264_audclocksweep_20261011_0503.rbf (30a71bf). SEED 4 pinned.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -477,4 +486,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 2
+set_global_assignment -name SEED 4

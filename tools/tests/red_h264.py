@@ -109,7 +109,7 @@ MUTATIONS = [    # the HIL settings backup (test_mister_cfg.py; the .hilnew mark
      "test_hps_lib.py", "the version rule ignores the minor (an older core serves a newer program)"),
     ("hps/lib/h264ring.c", "    if (!h264ring_version_ok((uint32_t)(w1 & 0xFFFFu), H264RING_VERSION) ||",
      "    if ((w1 & 0xFFFFu) != H264RING_VERSION ||",
-     "test_hps_lib.py", "attach checks the version exactly (a 1.1 core refuses a 1.0 program)"),
+     "test_hps_lib.py", "attach checks the version exactly (a 1.2 core refuses a 1.1 program)"),
     # P3, the client library (test_hps_lib.py: hps/ built in the copy)
     ("hps/lib/h264ring.c", "    ctrl_lo_store(r, H264RING_W_NONCE, nonce);        /* the nonce ALONE starts the session */",
      "    ctrl_lo_store(r, H264RING_W_WRITE_INDEX, 0);\n    ctrl_lo_store(r, H264RING_W_NONCE, nonce);",

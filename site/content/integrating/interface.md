@@ -321,7 +321,7 @@ does all of this.
 ## Versions
 
 Word 1's low 16 bits hold the interface version, major x 256 + minor: `0x0100` is 1.0. This
-manual describes 1.0.
+manual describes 1.1 (`0x0101`).
 
 **Within 1.x the interface only grows.** A later minor version (1.1, 1.2, ...) never moves a
 word or a field, never changes what a value means, and never makes a field your program writes
@@ -331,7 +331,8 @@ mean something new when it is 0. It may add:
 - a program word or a field in one that had to be written 0 (0 keeps asking for what 1.0
   does);
 - a record type, a flag, an input event type, an error code or a menu setting that 1.0 refused
-  or did not have.
+  or did not have;
+- a guarantee about what the core does in a case 1.0 left unsafe, such as 1.1's (below).
 
 A change that cannot be made that way is a new major version (2.0), never a silent one.
 
@@ -350,3 +351,7 @@ A change that cannot be made that way is a new major version (2.0), never a sile
 ## Version history
 
 - **1.0** -- the first published version, frozen under the rules above.
+- **1.1** -- the layout unchanged. Audio your program wrote ahead of its video can no longer stop
+  the picture: a late picture is shown late instead of moving the clock back, unless the audio
+  has run dry or come late since it last waited ahead ([Audio](audio.md#how-the-core-plays-it)).
+  A program built for 1.1 refuses a 1.0 core.
