@@ -335,7 +335,9 @@ arm first** (`history.md` §45: 1.0.0's client froze and played two opens silent
 livelock (Part B, `architecture.md` "Queued audio: a late picture never runs the clock back over it"): **interface 1.1,
 building on `feature/aud-clock`** (the go given 2026-10-10): no lateness re-anchor while the queued audio leads (it waited
 for the clock or started it, and has neither run dry nor come late since: `aud_play`'s `aud_lead` -> `disp_sched`); the
-layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core). ⏳ benches, fit, rig. 91 % ALM, 9 DSP left.
+layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core). Benches GREEN and `--red`; fit SEED 4
+103.8 / 102.73 PASS (`H264_audclocksweep_20261011_0503.rbf`); on .201 (`history.md` §46) a 10 s audio lead stuck the 1.0
+core and plays on 1.1, and 1.0.0's Jellyfin client plays the film's freezing open. ⏳ The maintainer's round; merge. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)

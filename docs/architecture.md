@@ -765,11 +765,13 @@ audio within a second never gets there.
   scenarios unchanged (the lead 0).
 - No bench runs `aud_play` and the display together (the cosim's ring mode ties the audio off): the
   end-to-end proof is the rig.
-- The fit (an RTL change).
-- The rig, control arm first. `h264play --pcm FILE --pcm-lead 6000` writes the audio 6 s ahead, as the
-  server did: it should reproduce the freeze on 1.0.0's core and play (late) on this one. Then 1.0.0's
-  Jellyfin client (no interleave fix) with the film's 2026-10-09 opens on this core: late, not stuck. The
-  logger's `disp_reanchor` / `aud_state` / `aud_q_rec` / `disp_late` are the readings.
+- The fit: SEED 4 103.8 / 102.73 PASS (`history.md` §46).
+- **The rig** (`history.md` §46), control arm first. `h264play --pcm-lead 6000` does NOT stick a 1.0 core:
+  its pictures are only ~0.9 s late (6 - 5.12 s), under `LATE_MAX`. A lead past ~8 s does: **`--pcm-lead
+  10000` stuck the 1.0 core** (3 access units, 2 re-anchors, the program's write timed out) **and plays to
+  its end on 1.1** (0 re-anchors, every picture ~4.9 s late, no silence). 1.0.0's Jellyfin client with the
+  film's freezing open plays on 1.1 (73 s of clock in 76 s); its one later re-anchor followed the audio
+  running dry, the stall rule.
 
 ### The pause and volume word (program word 34, a u32)
 

@@ -1529,3 +1529,34 @@ The clock is measured within each session; the probe is the stream-info stage, f
 Restored: the menu core, 1.0.0's client back in `/media/fat/jellyfin/jellyfin`, this branch's beside it as
 `jellyfin.jftranscode` (0ef771f4...). The file player's ARM build was not run on the rig (the same
 `player.c`; host-tested: (x) / (y)).
+
+## 46. Interface 1.1: a late picture never runs the clock back over leading audio (feature/aud-clock, 2026-10-11)
+
+`docs/architecture.md` "Queued audio: a late picture never runs the clock back over it" (and "Version 1.1").
+The rule changed while building: "the audio on time" (the merged draft) would also have caught a stall,
+whose late audio is dropped and on time again before the late picture is decoded. The audio's history
+tells the two apart (`aud_lead`: it waited for the clock or started it, and has neither run dry nor come
+late since). Benches: `run_disp_anc.sh` X7-X10 and `run_aud_play.sh` `[lead]` A12 / A13, both GREEN and
+`--red`; `run_disp_sched.sh` GREEN (40 scenarios, both rasters, heldlead new); D2 / D27 RED.
+
+**Fits** (the SEED LEDGER): SEED 2 first roll MARGINAL (102.32 / 99.05). The first sweep (5, 13, 6, 3, 12, 7,
+9, 1) all missed by 0.5-3 MHz. The census (SEED 1, -40 C) put the failing endpoints in the decoder's own
+reconstruction (recon_inter's 5x5 product, recon_hdr, recon_mb), re-placed by the netlist change. The second
+sweep's first seed passed: **SEED 4, 103.8 / 102.73 PASS**, clk_vid 92.04 / 88.43, 39,014 ALM (93 %), RAM 421,
+DSP 109, `H264_audclocksweep_20261011_0503.rbf` (30a71bf).
+
+**On .201** (with the maintainer's word; control arm first). Each arm ran as the harness core
+(`_Other/H264_hil.rbf`), with the 1 s logger (`h264stat --json`) beside 1.0 programs (a 1.0 program runs on
+a 1.1 core). The clip is 40 s of 720x480 at 29.97 (x264, no B-frames: `--pts`) with a chirp, played as
+`h264play --pts --fps 29.97 --pcm lead.pcm --pcm-lead MS`.
+
+| | 1.0 core (`H264_20261010.rbf`, chroma) | 1.1 core (SEED 4) |
+|---|---|---|
+| `--pcm-lead 6000` | plays to its end, ~0.9 s late (6 - 5.12 s: under `LATE_MAX`), no re-anchor | -- |
+| `--pcm-lead 10000` | **stuck**: 3 access units consumed, the clock 2.6 s in 12 s, 2 re-anchors, the ring full: `h264play` gave up at access unit 333 ("Connection timed out") | **plays to its end**: the clock 41.6 s in 42 s, 0 re-anchors, every picture shown ~4.9 s late (`disp_late` 1,194), `aud_gap` 0 |
+| 1.0.0's Jellyfin client, the film, Play 5046.4 s (Part A's freeze, `history.md` §45) | froze: the clock 21.1 s in 60.5 s, 6 re-anchors | plays: the clock 73.4 s in 76.3 s; `aud_q_rec` reached 256 and no re-anchor came of it |
+
+On the 1.1 core the Jellyfin run's one later re-anchor came after the audio ran dry (`aud_q_rec` 0, an
+underrun). That is the stall's case, where the 1.0 recovery is kept: the audio then waited, played, and the
+stream ran on. Logs: `/media/fat/h264tel/b_{control,control10,new10,jf10}.*` on the rig. Restored: the menu
+core, the harness core and binaries removed, 1.0.0's client and the installed cores untouched.

@@ -979,7 +979,9 @@ the identity").
       freeze from a stall): no lateness anchor while the queued audio LEADS (waited for the clock or started
       it, neither ran dry nor came late since). Built: `aud_play`'s `aud_lead`, `disp_sched`'s `lat`, the
       layout's version 1.1; benches `run_disp_anc.sh` X7-X10, `run_aud_play.sh` `[lead]` A12 / A13,
-      `run_disp_sched.sh` heldlead. ⏳ The scheduler gate, the fit, the rig (control arm first).
+      `run_disp_sched.sh` heldlead, all GREEN and `--red`; fit SEED 4 103.8 / 102.73 PASS; **on .201** (control
+      arm first, `history.md` §46): an audio lead of 10 s stuck the 1.0 core and plays to its end on 1.1, and
+      1.0.0's Jellyfin client plays the film's freezing open. ⏳ The maintainer's round; merge.
 
 ## Phase 7 — For integrators
 
