@@ -1651,6 +1651,14 @@ byte-identical `.rbf` (sha256 `e20b2ef3...`), its report on `X0_Y7_N1`.
   - On .201 the HDMI clock measured 27.000 MHz at `video_mode=2`, 74.250 at `0` and 148.500 at `8`.
     The same netlist without the pins had measured 135 / 148.5 / 148.5.
 - The release skill's smoke test now reads `mister.py hdmi` at `video_mode=2`.
+- **The branch's fit:** SEED 4's first roll was MARGINAL (98.12 / 98.72). In the sweep **SEED 5 passed at 101.77 / 101.58**,
+  clk_vid 91.65 / 87.57, with `hdmi_pll_check` PASS (`H264_hdmi480sweep_20261011_1951.rbf`, `a02caba`; the SEED
+  LEDGER has the rest).
+  - On .201 HDMI measured 27.000 / 74.250 / 148.500 MHz at `video_mode` 2 / 0 / 8.
+  - The test chart in Native (a 720x480 raster on that HDMI mode) is 100.00 % exact against `disp_golden`; errors,
+    late and fetch-late are all 0.
+  - Progressive could not be scored on that HDMI mode. ascal stores a 4:3 picture at its output width (640), and
+    `shot` reads ascal's buffer: the raw shot is 640 wide, so it is a different instrument from the 720-wide raster.
 
 **Also measured the same day** (the maintainer's "480p looks jagged", PC desktop at 640x480; .201 on the
 chroma core):
