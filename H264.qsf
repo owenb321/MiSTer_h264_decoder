@@ -393,6 +393,9 @@
 #   2026-10-11 (the same pins on a83a388, the chroma build, SEED 2, BUILD_DATE pinned 261010 -- a test, not
 #     shipped): MARGINAL on clk_dec; output counter X0_Y5_N1; on .201 HDMI 27.000 / 74.250 / 148.500 MHz (was 135 /
 #     148.5 / 148.5 without the pins). Kept in .sim/hdmi480/seed2fix.
+#   2026-10-11 fix/fit-anamorphic (issue #11, Fit the anamorphic 16:9 fit; f66d842 + roadmap): SEED 5 first roll
+#     MARGINAL, clk_dec 100.45 / 98.98 (gate 101.4), clk_vid 94.23 / 90.98 PASS, HDMI gate PASS (X0_Y5_N1);
+#     ALM 39,074 (93 %), RAM 421, DSP 109, H264_fit169_MARGINAL_20261011_2117.rbf. Sweep follows.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
