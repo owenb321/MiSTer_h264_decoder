@@ -118,8 +118,9 @@ field 240 of those lines). Per Analog Aspect:
 - **Letterbox** (and Auto): `s = min(720 / Ww, 480 / Hc)` -- the whole picture, bars on the
   short axis (pillarbox for 4:3-and-narrower, portrait; letterbox for wider);
 - **Crop**: `s = max(720 / Ww, 480 / Hc)` -- the raster filled, the long axis cut;
-- **Fit**: `720 / Ww` and `480 / Hc` separately -- the raster filled, the geometry
-  stretched (MiSTer_DVD's anamorphic Fit).
+- **Fit**: the anamorphic 16:9 fit (§5a, issue #11; until 2026-10-11 `720 / Ww` and `480 / Hc`
+  separately -- the raster filled, the geometry stretched: MiSTer_DVD's Fit) -- Letterbox's
+  rule for the 16:9 a TV in its wide mode shows the raster at.
 The output rectangle `(s Ww) x (s Hc)` is centred, odd remainders to the right / bottom.
 The step for each axis, source pixels per output pixel in fixed point, and the first
 output's phase are computed ONCE per shown store by a restoring divider (MiSTer_DVD's
@@ -174,8 +175,8 @@ figure is arithmetic, confirmed on the rig with the feature.
 - SAR: `aspect_vui`'s resolved `sar_w : sar_h`; unspecified or reserved -> 1 : 1.
 - Letterbox's test `3 Wc sar_w >= 4 Hc sar_h` (the picture at least as wide as 4:3):
   `ow = 720, oh = round(640 Hc sar_h / (Wc sar_w))`; else `oh = 480, ow = round(540 Wc
-  sar_w / (Hc sar_h))`. Crop the other branch; Fit `720 x 480`. Each of `ow, oh` at least
-  2. **The native snap:** under Letterbox / Crop, a fit within 3.5 % of the picture's own
+  sar_w / (Hc sar_h))`. Crop the other branch; Fit §5a's. Each of `ow, oh` at least
+  2. **The native snap:** under Letterbox / Crop / Fit, a fit within 3.5 % of the picture's own
   size on both axes (`1000 |ow - Wc| <= 35 Wc`, alike for `oh`) is shown 1:1 -- BT.601's
   720x480 at 10:11 against the raster's 8:9 is 2 %: a 480 -> 469 rescale would soften
   every line on a CRT to correct what overscan hides. `ox0 = (720 - ow) >> 1`
@@ -216,7 +217,7 @@ addressable -- portrait's 854 need 11, the spec's 2,048 too), a line slot 128 wo
 samples), one source row fetched per display line.
 
 **HDMI (Progressive): fill + the exact aspect** (decided 2026-09-29, the maintainer).
-The raster is filled (the Fit mapping) and `VIDEO_ARX/ARY` carry the picture's exact
+The raster is filled (Fit's mapping then; since issue #11 `disp_fit`'s mode 3, Fill) and `VIDEO_ARX/ARY` carry the picture's exact
 display aspect `sar_w Wc : sar_h Hc`, reduced to fit 13 bits (sar 16:11 x 720 exceeds
 8,191), so ascal restores the geometry at the raster's full resolution -- portrait as
 9 : 16. ARX < ARY is ordinary for Main (vertical arcade cores report 3 : 4); confirmed on
@@ -229,7 +230,7 @@ RetroTINK: in Progressive the analog pins carry the FILLED raster, so a 31 kHz a
 -- a VGA CRT, an external scaler -- showed a portrait picture stretched to 4:3, the exact
 aspect reaching HDMI only). The option is shown in both modes; set explicitly (Letterbox /
 Crop / Fit) it fits the picture inside the 4:3 raster in Progressive as well and HDMI is
-told 4:3 (`raster_fitted`); its Auto keeps Letterbox at 480i and fill + the exact aspect in
+told 4:3 (`raster_fitted`; 16:9 under Fit since §5a); its Auto keeps Letterbox at 480i and fill + the exact aspect in
 Progressive. check_emu_wiring pins `ar_exact` to `raster_fitted` (W48).
 
 **Timing:** closed once for the whole phase (decided 2026-09-29): step 3 changes CONF_STR,
@@ -244,6 +245,43 @@ Analog Aspect mode. `--red` as always.
 
 **Lands with it:** Analog Aspect in CONF_STR (once; `settings.md`, `docs_check`), the
 manual's compatibility row, the roadmap's exact-aspect item.
+
+### 5a. Fit, the anamorphic 16:9 fit (issue #11, decided 2026-10-11 with the maintainer)
+
+**Found** (issue #11, on the rig with a 720x304 2.37:1 clip): Fit stretched every picture to the
+whole 720 x 480 raster, and a TV in its 16:9 (wide) mode stretches that to 16:9 -- so every
+picture came out at 1.78:1: a scope film 25 % too tall, a 4:3 picture stretched wide. On a DVD
+(MiSTer_DVD's Fit) the anamorphic frame IS 16:9 and a scope film is letterboxed inside it, so
+filling the raster was right there; streams and files carry a scope film at its own shape.
+
+**The rule:** Letterbox, computed for a 16:9 display, then stretched to the raster (the raster's
+720 dots span the screen's width whatever its lines, so one rule serves 480 and 576):
+- wider than 16:9 (`9 A > 16 B`, `A = Wc sar_w`, `B = Hc sar_h`): `ow = 720`, `oh = round(rh x
+  16 B / 9 A)` -- §3a of `hdmi_raster.md`'s quotient with a 16 x 9 "display": `P = 16 B`, `Q = 9 A`
+  shifted down together until `Q` fits 28 bits, `oh = round(rh P / Q)`. The 720x304 clip -> 720 x
+  360 (576 lines: 432). `lb` stays 0: the raster is the analog one, not shown at a display's shape.
+- 16:9 or narrower: `oh = rh`, `ow = round(405 A / B)` (`720 x 9/16`, Letterbox's 540 being
+  `720 x 3/4`): 4:3 -> 540, portrait 480x854 -> 228; exactly 16:9 -> 720 (filled, as before).
+- **4:3 pillarboxed** (the maintainer's choice: the alternative was keeping the stretch for
+  narrower pictures; pillarboxing is what a wide-mode TV needs to show it undistorted).
+- The native snap applies as under Letterbox (both axes within 3.5 %): an anamorphic 704x480 at
+  40:33 (exactly 16:9) is shown 1:1, 8 columns in.
+- **HDMI's Auto aspect is 16:9 under Fit** (the maintainer's choice; `emu`'s `fit_169`,
+  `check_emu_wiring` pins it, `run_scaffold.sh` W111): HDMI shows the raster as the wide-mode TV
+  does, so a Fit picture is undistorted on HDMI too (before: 4:3, which suited only the old stretch).
+
+**What did not change:** Fill (mode 3: HDMI in Progressive with Analog Aspect Auto) keeps the
+raster filled when the picture is not wider than the display, and A' when it is; with no display
+(`disp_w` 0) it is the old Fit exactly. The benches that meant "the raster filled" (the reader's
+identity arms, `run_vid_equiv.sh`'s cases, `disp_golden.py`'s fitted cases) now drive mode 3 with no
+display -- their goldens are byte-identical to main's. No interface change: word 30 already
+reports the fit's rectangle.
+
+**Gates:** `run_disp_fit.sh --red` (the model vs ffmpeg on an 854x480 / 1024x576 square canvas for
+Fit; the RTL vs the model on 16,399 vectors -- Fit letterboxed 2,180, pillarboxed 1,770, filled 44,
+snapped 6; F33-F38 Fit's mutations, each by its own arm; the bench checks `lb` before the flags now,
+since an `lb` defect moves the snap rule); `run_disp_reader.sh` (`fit_scope` 720x304 at 480i, `fit_43`
+640x480 pillarboxed); `run_vid_equiv.sh`; `run_scaffold.sh --red` (W111).
 
 ## 6. Known limits carried in
 

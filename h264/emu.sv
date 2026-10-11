@@ -1184,7 +1184,8 @@ disp_ctl disp_ctl_inst (
 );
 
 // ---- the fit (P6 step 3, docs/analog.md §5): where and how big the shown picture is ----
-// Analog Aspect (MiSTer_DVD's option: Fit the anamorphic stretch, Letterbox, Crop) fits the
+// Analog Aspect (MiSTer_DVD's option: Fit -- since issue #11 the anamorphic 16:9 fit, the picture
+// letterboxed / pillarboxed for a TV in its wide mode --, Letterbox, Crop) fits the
 // picture inside the 4:3 raster, on either output mode -- a 31 kHz analog display (a VGA
 // CRT, an external scaler) needs it in Progressive too (decided 2026-09-29, the maintainer:
 // found on the RetroTINK). Its Auto: Letterbox at 480i; in Progressive the raster is FILLED
@@ -1755,7 +1756,8 @@ wire auto_wide  = stream_live ? live_wide : (played ? last_wide_q : idle_wide);
 // sys_top a VIDEO_ARX / ARY with bit 12 set is not a ratio but an explicit output size in
 // pixels (`arxy`: wcalc <= arx) -- a 13-bit ratio would size the HDMI picture literally. A
 // shift keeps the ratio to 1 part in 2,048 (no gcd needed); portrait arrives as 9 : 16.
-// When the raster carries a 4:3 fit (480i, or Analog Aspect set explicitly) Auto is 4:3.
+// When the raster carries a 4:3 fit (480i, or Analog Aspect set explicitly) Auto is 4:3 -- 16:9 under
+// Fit, the anamorphic 16:9 fit (issue #11: fit_169 below).
 // Idle, the display's own (auto_wide). Registered: the inputs change only with the shown picture.
 reg  [27:0] ex_x, ex_y;
 reg  [11:0] ar_x, ar_y;
@@ -1792,8 +1794,11 @@ always @(posedge clk_sys) begin
 	else                begin ar_x <= ex_x[11:0];  ar_y <= ex_y[11:0];  end
 end
 wire ar_exact   = (status[2:1] == 2'd0) && !raster_fitted && (stream_live || played);
+// (issue #11, decided 2026-10-11 with the maintainer) Analog Aspect Fit is the anamorphic 16:9 fit: the
+// raster is meant to be shown at 16:9, as a TV in its wide mode shows it, so HDMI's Auto is 16:9 there
+wire fit_169    = raster_fitted && (status[9:8] == 2'd1);
 wire ar_wide    = (status[2:1] == 2'd1) ? 1'b0 :
-                  (status[2:1] == 2'd2) ? 1'b1 : (auto_wide && !raster_fitted);
+                  (status[2:1] == 2'd2) ? 1'b1 : (fit_169 || (auto_wide && !raster_fitted));
 assign VIDEO_ARX = ar_exact ? {1'b0, ar_x} : ar_wide ? 13'd16 : 13'd4;   // bit 12 clear: a ratio
 assign VIDEO_ARY = ar_exact ? {1'b0, ar_y} : ar_wide ? 13'd9  : 13'd3;
 

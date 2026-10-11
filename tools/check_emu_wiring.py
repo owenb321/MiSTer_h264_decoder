@@ -1048,6 +1048,11 @@ def main():
     if 'raster_fitted' not in terms(ae) or not {'interlaced_eff'} <= terms(rf) or 'status[9:8]' not in rf.replace(' ', ''):
         bad('ar_exact', 'the exact aspect must wait for raster_fitted = 0 (interlaced_eff, or Analog Aspect set: the '
                         'raster then carries a 4:3 fit)')
+    # (issue #11) Analog Aspect Fit is the anamorphic 16:9 fit: HDMI's Auto is 16:9 over it
+    f169 = (assign_of(src, 'fit_169') or '').replace(' ', '')
+    if 'fit_169' not in terms(assign_of(src, 'ar_wide') or '') or 'raster_fitted' not in f169 \
+            or "status[9:8]==2'd1" not in f169:
+        bad('ar_wide', "Auto must be 16:9 under Analog Aspect Fit (fit_169 = raster_fitted && status[9:8] == 2'd1)")
     # P6 step 3: VIDEO_ARX / ARY with bit 12 set is an explicit SIZE in sys_top (arxy), not a
     # ratio: the exact aspect's terms are 12 bits and the assign keeps bit 12 clear
     for port, reg in (('VIDEO_ARX', 'ar_x'), ('VIDEO_ARY', 'ar_y')):

@@ -177,7 +177,7 @@ def chroma_line(Ud, Vd, f, L, xs, sit=(0, 0), field=False, bobkeep=None, want_po
 
 def ident_fit(W, H):
     import disp_fit_ref as _frr
-    f = _frr.fit(W // 16, H // 16, mode='fit')
+    f = _frr.fit(W // 16, H // 16, mode='fill')     # the raster filled (no display): any picture at 720x480 is the identity
     assert f['sx'] == f['sy'] == 1 << 16 and f['dh'] == f['dv'] == 1 and f['ox0'] == f['oy0'] == 0, "not the identity"
     return f
 
@@ -617,23 +617,25 @@ def write_want_de(name, img, de):
                 fh.write(("1%02x%02x%02x\n" % tuple(img[y, x])) if de[y, x] else "0000000\n")
 
 
-# the identity: 720x480 in Fit on the progressive raster is the frame golden, bit for bit -- render's
-# crop-aware identity chroma (hup over the crop's columns, vrow) against up_ident's whole frame
-_f = _fr.fit(45, 30, mode='fit')
+# the identity: 720x480 filled (mode 3 with no display) on the progressive raster is the frame golden,
+# bit for bit -- render's crop-aware identity chroma (hup over the crop's columns, vrow) against
+# up_ident's whole frame. (Before issue #11 Fit filled the raster; Fit is now the anamorphic 16:9 fit,
+# which pillarboxes 720x480, so the "fill the raster" cases below are 'fill'.)
+_f = _fr.fit(45, 30, mode='fill')
 _img, _de = render(*L, _f)
 assert _de.all() and (_img == rgb(L[0], up_ident(L[1]), up_ident(L[2]))).all(), "the identity fit is not the frame golden"
 # the fitted cases: (name, seed, W, H in MBs, crop (cuy4, l, r, t, b), sar, mode, il, at[, pal])
-FIT = [("s",    11, 30, 17,  (0, 0, 0, 0, 0), (1, 1),   'fit',       False, False),   # 480x272 up, progressive
+FIT = [("s",    11, 30, 17,  (0, 0, 0, 0, 0), (1, 1),   'fill',      False, False),   # 480x272 up, progressive
        ("t",    13, 45, 36,  (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  False),   # 720x576 pillarbox, 480i
        ("w",    17, 54, 30,  (0, 2, 3, 0, 0), (1, 1),   'letterbox', True,  False),   # 854x480 (cropped 4 + 6) letterbox
        ("wc",   17, 54, 30,  (0, 0, 5, 0, 0), (1, 1),   'crop',      True,  False),   # 854x480 Crop: the sides cut
        ("v",    19, 30, 54,  (0, 0, 0, 2, 3), (1, 1),   'letterbox', True,  False),   # 480x854 portrait (cropped 4 + 6)
        ("snap", 23, 44, 30,  (0, 0, 0, 0, 0), (10, 11), 'letterbox', True,  False),   # 704x480 10:11: 1:1, offset 8
        ("tall", 29, 12, 128, (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  False),   # 192x2048: dv 8, dh 2
-       ("wide", 31, 128, 12, (0, 0, 0, 0, 0), (1, 1),   'fit',       False, False),   # 2048x192: dh 2 (the buffer)
-       ("p640", 37, 40, 30,  (0, 0, 0, 0, 0), (1, 1),   'fit',       False, False),   # 640x480 stretched
+       ("wide", 31, 128, 12, (0, 0, 0, 0, 0), (1, 1),   'fill',      False, False),   # 2048x192: dh 2 (the buffer)
+       ("p640", 37, 40, 30,  (0, 0, 0, 0, 0), (1, 1),   'fill',      False, False),   # 640x480 stretched
        # anti-twitter (P6 step 4, docs/analog.md §9): 480i, sliding boxes
-       ("at_id",   41, 45, 30,  (0, 0, 0, 0, 0), (1, 1), 'fit',       True, True),     # 720x480: the (1, 2, 1)
+       ("at_id",   41, 45, 30,  (0, 0, 0, 0, 0), (1, 1), 'fill',      True, True),     # 720x480: the (1, 2, 1)
        ("at_w",    43, 54, 30,  (0, 2, 3, 0, 0), (1, 1), 'letterbox', True, True),     # 854x480 letterbox
        ("at_v",    47, 30, 54,  (0, 0, 0, 2, 3), (1, 1), 'letterbox', True, True),     # 480x854: the crop's top
        ("at_tall", 53, 12, 128, (0, 0, 0, 0, 0), (1, 1), 'letterbox', True, True),     # 192x2048: dv 4, 8-row boxes
@@ -644,23 +646,27 @@ FIT = [("s",    11, 30, 17,  (0, 0, 0, 0, 0), (1, 1),   'fit',       False, Fals
        ("pal_n",   71, 45, 36,  (0, 0, 0, 0, 0), (12, 11), 'letterbox', True,  False, True),  # 720x576 12:11: the snap, 576i
        ("pal_at",  73, 64, 23,  (0, 0, 0, 0, 8), (1, 1),   'letterbox', True,  True,  True),  # 1024x352 (cropped) 576i anti-twitter
        # (0.11) 1280x720, 3,600 macroblocks: the 2 MiB store (Cb at word 115,200, past 2^17), dh 2
-       ("hd",      97, 80, 45,  (0, 0, 0, 0, 0), (1, 1),   'fit',       False, False),        # 1280x720 Fit, 480p: 640 stored
+       ("hd",      97, 80, 45,  (0, 0, 0, 0, 0), (1, 1),   'fill',      False, False),        # 1280x720 filled, 480p: 640 stored
        ("hd_il",  101, 80, 45,  (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  False),        # letterboxed at 480i
        ("hd_at",  103, 80, 45,  (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  True),         # ... with anti-twitter
        ("hd_pal", 107, 80, 45,  (0, 0, 0, 0, 0), (1, 1),   'letterbox', True,  False, True),  # letterboxed at 576i
        # (docs/analog.md §11b) the Area pre-filter: (..., pal, flt) -- 'area' the core's, the cases above
        # without it the Sharp control (bit-identical to main)
-       ("hd_area",    109, 80, 45,  (0, 0, 0, 0, 0), (1, 1), 'fit',       False, False, False, 'area'),    # 1,280 kept: A 3 / 2
+       ("hd_area",    109, 80, 45,  (0, 0, 0, 0, 0), (1, 1), 'fill',      False, False, False, 'area'),    # 1,280 kept: A 3 / 2
        ("hd_il_area", 127, 80, 45,  (0, 0, 0, 0, 0), (1, 1), 'letterbox', True,  False, False, 'area'),    # 480i
        ("hd_at_area", 131, 80, 45,  (0, 0, 0, 0, 0), (1, 1), 'letterbox', True,  True,  False, 'area'),    # ... with anti-twitter
        ("w_area",     137, 54, 30,  (0, 2, 3, 0, 0), (1, 1), 'letterbox', True,  False, False, 'area'),    # 854x480 at 480i: A 1 / 1
        ("w_at_area",  139, 54, 30,  (0, 2, 3, 0, 0), (1, 1), 'letterbox', True,  True,  False, 'area'),    # ... anti-twitter the stronger
-       ("p_area",     149, 54, 30,  (0, 0, 5, 0, 0), (1, 1), 'fit',       False, False, False, 'area'),    # horizontal only (rows 1:1)
+       ("p_area",     149, 54, 30,  (0, 0, 5, 0, 0), (1, 1), 'fill',      False, False, False, 'area'),    # horizontal only (rows 1:1)
        ("port_area",  151, 45, 80,  (0, 0, 0, 0, 0), (1, 1), 'letterbox', False, False, False, 'area'),    # 720x1280: dh 2 dv 2, W odd
        ("wide_area",  163, 128, 28, (0, 0, 0, 0, 0), (1, 1), 'letterbox', False, False, False, 'area'),    # 2048x448: past the budget
        ("tall_area",  167, 12, 128, (0, 0, 0, 0, 0), (1, 1), 'letterbox', True,  False, False, 'area'),    # 192x2048 dv 4
        ("pal_area",   173, 64, 36,  (0, 0, 0, 0, 0), (1, 1), 'letterbox', True,  False, True,  'area'),    # 1024x576 at 576i
-       ("s_area",     11, 30, 17,   (0, 0, 0, 0, 0), (1, 1), 'fit',       False, False, False, 'area')]    # an upscale: Sharp's raster
+       ("s_area",     11, 30, 17,   (0, 0, 0, 0, 0), (1, 1), 'fill',      False, False, False, 'area'),    # an upscale: Sharp's raster
+       # (issue #11) Fit, the anamorphic 16:9 fit: the issue's 720x304 scope clip letterboxed to 720x360 at
+       # 480i, and 640x480 pillarboxed to 540 at 480p
+       ("fit_scope",  179, 45, 19,  (0, 0, 0, 0, 0), (1, 1), 'fit',       True,  False),
+       ("fit_43",     181, 40, 30,  (0, 0, 0, 0, 0), (1, 1), 'fit',       False, False)]
 # (hdmi_raster stage 2) the native raster: raster_geom's geometry for the picture on a 1920x1080
 # display, the fit's identity on it -- (name, seed, W, H in MBs, crop, sar, std)
 import raster_geom_ref as _rg
@@ -702,7 +708,7 @@ with open(os.path.join(out, "disp_fit_cases.txt"), "w") as cf:
         write_want_de("disp_want_fit_%s.hex" % name, img, de)
         cf.write("%s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d  %dx%d at (%d, %d) dh %d dv %d snap %d pf %d/%d\n" % (
             name, wm, hm, cr[0], cr[1], cr[2], cr[3], cr[4], sar[0], sar[1],
-            ('letterbox', 'crop', 'fit').index(mode), int(il), int(at), int(pal), _fr.FLT.index(flt), 9 * sit_t,
+            ('letterbox', 'crop', 'fit', 'fill').index(mode), int(il), int(at), int(pal), _fr.FLT.index(flt), 9 * sit_t,
             f['ow'], f['oh'], f['ox0'], f['oy0'], f['dh'], f['dv'], int(f['snap']), f['hpf'], f['vpf']))
         if flt != 'sharp':
             check_filter(name, wm, hm, cr, sar, mode, il, at, pal, flt)

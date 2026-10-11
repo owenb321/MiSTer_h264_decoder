@@ -10,7 +10,8 @@
 //   [slide] anti-twitter's sliding rows published with the set (P6 step 4: the `at` column)
 //   [crop]  wc, hc, lx, ty            the cropped size and origin
 //   [lb]    A' (mode 3, Fill: wider than the HDMI display -> letterboxed inside the raster;
-//           docs/hdmi_raster.md §3a) published with the set
+//           docs/hdmi_raster.md §3a) published with the set -- and never under Fit (mode 2, issue #11:
+//           the anamorphic 16:9 fit letterboxes inside the analog raster, which stays 4:3)
 //   [pf]    (docs/analog.md §11b) the Area pre-filter's codes hpf / vpf (the last three columns: area
 //           in -- 1 the core's, 0 the Sharp control -- hpf, vpf out), the budget's fallback included
 //   [seq]   a computation ends within 400 cycles; the outputs do not move while one runs
@@ -56,6 +57,7 @@ integer eow, eoh, eox, eoy, esx, esy, edh, edv, efl, ewc, ehc, elx, ety, vflt, e
 integer n_hpf = 0, n_varea = 0, n_vsm = 0, n_fall = 0;
 integer n_bad = 0, n_snap = 0, n_clamp = 0, n_dec = 0, n_slide = 0, n_capped = 0, n_pal = 0;
 integer n_fill = 0, n_lb = 0, n_lb_snap = 0, n_lb_pal = 0, n_nat = 0, n_nat_off = 0;
+integer n_fit_lbx = 0, n_fit_pbx = 0, n_fit_full = 0, n_fit_snap = 0;   // (issue #11) Fit: letterboxed, pillarboxed, filled, snapped
 string vec;
 reg [144:0] prev;
 initial begin
@@ -86,13 +88,14 @@ initial begin
         t = 0;
         while (busy === 1'b1 && t < 400) begin @(posedge clk); #1; t = t + 1; end
         if (busy !== 1'b0) `FAIL("seq", $sformatf("vector %0d: still busy after 400 cycles", n))
-        // the flags first: a snap / crop / clamp defect moves the size too, and is theirs
-        if ({crop_bad, snap, clamp} !== {efl[0], efl[1], efl[2]})
-            `FAIL("flag", $sformatf("vector %0d: bad %b snap %b clamp %b, want %b %b %b", n,
-                  crop_bad, snap, clamp, efl[0], efl[1], efl[2]))
+        // A' first: lb decides the snap rule (its vertical-only snap), so an lb defect moves the flags and
+        // is its own; then the flags: a snap / crop / clamp defect moves the size too, and is theirs
         if (lb !== efl[4])
             `FAIL("lb", $sformatf("vector %0d (%0dx%0d MBs sar %0d:%0d mode %0d display %0dx%0d): lb %b, want %b", n,
                   vw, vh, vsw, vsh, vmode, vdw, vdh, lb, efl[4]))
+        if ({crop_bad, snap, clamp} !== {efl[0], efl[1], efl[2]})
+            `FAIL("flag", $sformatf("vector %0d: bad %b snap %b clamp %b, want %b %b %b", n,
+                  crop_bad, snap, clamp, efl[0], efl[1], efl[2]))
         if (slide !== efl[3])
             `FAIL("slide", $sformatf("vector %0d (at %0d): slide %b, want %b", n, vat, slide, efl[3]))
         if ({ow, oh, ox0, oy0} !== {eow[12:0], eoh[12:0], eox[13:0], eoy[13:0]})
@@ -121,6 +124,12 @@ initial begin
         if (efl[3]) n_slide = n_slide + 1;
         if (vpal) n_pal = n_pal + 1;
         if (vmode == 3) n_fill = n_fill + 1;
+        if (vmode == 2 && !vnat) begin
+            if (efl[1]) n_fit_snap = n_fit_snap + 1;
+            else if (eow == 720 && eoh == (vpal ? 576 : 480)) n_fit_full = n_fit_full + 1;
+            else if (eow == 720) n_fit_lbx = n_fit_lbx + 1;
+            else n_fit_pbx = n_fit_pbx + 1;
+        end
         if (vnat) begin n_nat = n_nat + 1; if (eox != 0 || eoy != 0) n_nat_off = n_nat_off + 1; end
         if (efl[4]) n_lb = n_lb + 1;
         if (efl[4] && efl[1]) n_lb_snap = n_lb_snap + 1;
@@ -132,11 +141,11 @@ initial begin
     // without them scores nothing)
     if (n < 2000 || n_bad < 10 || n_snap < 5 || n_clamp < 10 || n_dec < 100 || n_slide < 500 || n_capped < 5 || n_pal < 1000 ||
         n_fill < 1000 || n_lb < 200 || n_lb_snap < 5 || n_lb_pal < 50 || n_nat < 100 || n_nat_off < 50 ||
-        n_hpf < 1000 || n_varea < 500)
-        `FAIL("harness", $sformatf("coverage: %0d vectors, %0d bad crops, %0d snaps, %0d clamps, %0d decimated, %0d anti-twitter (%0d capped), %0d on 576 lines, %0d Fill (%0d A', %0d snapped, %0d on 576)",
-              n, n_bad, n_snap, n_clamp, n_dec, n_slide, n_capped, n_pal, n_fill, n_lb, n_lb_snap, n_lb_pal))
-    $display("disp_fit_tb: %0d vectors identical to the model (%0d bad crops, %0d snaps, %0d clamps, %0d decimated, %0d anti-twitter, %0d capped, %0d on 576 lines, %0d Fill: %0d A', %0d snapped; %0d native, %0d centred off the origin; pre-filters: %0d horizontal, %0d vertical, %0d vertical capped)",
-             n, n_bad, n_snap, n_clamp, n_dec, n_slide, n_capped, n_pal, n_fill, n_lb, n_lb_snap, n_nat, n_nat_off, n_hpf, n_varea, n_fall);
+        n_hpf < 1000 || n_varea < 500 || n_fit_lbx < 200 || n_fit_pbx < 200 || n_fit_full < 20 || n_fit_snap < 5)
+        `FAIL("harness", $sformatf("coverage: %0d vectors, %0d bad crops, %0d snaps, %0d clamps, %0d decimated, %0d anti-twitter (%0d capped), %0d on 576 lines, %0d Fill (%0d A', %0d snapped, %0d on 576); Fit %0d letterboxed, %0d pillarboxed, %0d filled, %0d snapped",
+              n, n_bad, n_snap, n_clamp, n_dec, n_slide, n_capped, n_pal, n_fill, n_lb, n_lb_snap, n_lb_pal, n_fit_lbx, n_fit_pbx, n_fit_full, n_fit_snap))
+    $display("disp_fit_tb: %0d vectors identical to the model (%0d bad crops, %0d snaps, %0d clamps, %0d decimated, %0d anti-twitter, %0d capped, %0d on 576 lines, %0d Fill: %0d A', %0d snapped; Fit: %0d letterboxed, %0d pillarboxed, %0d filled, %0d snapped; %0d native, %0d centred off the origin; pre-filters: %0d horizontal, %0d vertical, %0d vertical capped)",
+             n, n_bad, n_snap, n_clamp, n_dec, n_slide, n_capped, n_pal, n_fill, n_lb, n_lb_snap, n_fit_lbx, n_fit_pbx, n_fit_full, n_fit_snap, n_nat, n_nat_off, n_hpf, n_varea, n_fall);
     $display("PASS: disp_fit_tb");
     $finish;
 end

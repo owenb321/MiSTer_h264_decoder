@@ -69,7 +69,9 @@ Two rasters, one rule for where the picture sits in them.
 ### 3a. The fitted raster (720 x 480 / 576) -- A'
 
 Unchanged at 480i / 576i and whenever Analog Aspect is set explicitly (`raster_fitted`): the 4:3
-fit, `VIDEO_ARX / ARY` 4 : 3.
+fit, `VIDEO_ARX / ARY` 4 : 3 -- 16 : 9 under Fit since issue #11 (`analog.md` §5a: Fit is the
+anamorphic 16:9 fit, and its letterbox reuses this section's quotient with a 16 x 9 "display",
+`lb` left 0).
 
 **Progressive with Analog Aspect Auto** (today: fill + the exact aspect):
 - **not wider than the display** (or `HW` = 0): unchanged -- the raster filled, `VIDEO_ARX / ARY`
