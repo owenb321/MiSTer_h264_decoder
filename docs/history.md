@@ -1560,3 +1560,14 @@ On the 1.1 core the Jellyfin run's one later re-anchor came after the audio ran 
 underrun). That is the stall's case, where the 1.0 recovery is kept: the audio then waited, played, and the
 stream ran on. Logs: `/media/fat/h264tel/b_{control,control10,new10,jf10}.*` on the rig. Restored: the menu
 core, the harness core and binaries removed, 1.0.0's client and the installed cores untouched.
+
+**The maintainer's round (2026-10-11, .201): "all tests look good".** The setup: the 1.1 core
+(`_Other/H264_20261011.rbf`), the fixed Jellyfin client and file player (PR #9), and the checklist: the film's
+four opens (1:24:06, 1:24:21, 1:41:31, 1:05:47) and the maintainer's own seeks, pause / stop / recast, a
+direct-play film, the file player, Moonlight. The 1 s logger over the 24 minutes recorded:
+- no re-anchor beyond each stream's first picture;
+- the audio queue peaking at 95 records;
+- one decoder error in one stream.
+Restored afterwards:
+- the 1.1 core kept as `H264_20261011.rbf.iface1_1` (inactive), the chroma build the active newest;
+- 1.0.0's `jellyfin` and `h264player` back in place, the fixed ones beside them as `*.jftranscode`.

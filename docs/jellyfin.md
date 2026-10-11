@@ -490,9 +490,9 @@ host test's T8 hooks are `client_test_par` / `client_test_lines` (in `clients/co
 
 ## 12. A transcode with no audio, and a freeze (found 2026-10-09; client fixes `fix/jellyfin-transcode`)
 
-Status: **the client's fixes ✅ MERGED (PR #9), host tests GREEN and `--red`, verified on .201** with the maintainer's film,
+Status: **the client's fixes ✅ MERGED (PR #9), ✅ HW-CONFIRMED 2026-10-11** (the maintainer's round; host tests GREEN and `--red`; verified on .201 with the maintainer's film,
 control arm first (`history.md` §45: 1.0.0's client froze and played two opens silent; this branch clean on
-every open). ⏳ The maintainer's own round. **The core's livelock: interface 1.1 on `feature/aud-clock`, verified on .201**
+every open). **The core's livelock: interface 1.1 on `feature/aud-clock`, ✅ HW-CONFIRMED 2026-10-11**
 (`history.md` §46: 1.0.0's client plays the freezing open on it) (Part B,
 `architecture.md` "Queued audio: a late picture never runs the clock back over it").
 

@@ -338,7 +338,8 @@ for the clock or started it, and has neither run dry nor come late since: `aud_p
 layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core). Benches GREEN and `--red`; fit SEED 4
 103.8 / 102.73 PASS (`H264_audclocksweep_20261011_0503.rbf`); on .201 (`history.md` §46) a 10 s audio lead stuck the 1.0
 core and plays on 1.1, and 1.0.0's Jellyfin client plays the film's freezing open (one re-anchor after its queue ran dry;
-6 on 1.0, frozen). ⏳ The full `run_disp_sched.sh --red` (D2 / D27 done); the maintainer's round; merge. 91 % ALM, 9 DSP left.
+6 on 1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN; ✅ HW-CONFIRMED 2026-10-11 (the maintainer's round on .201 with
+the fixed clients: "all tests look good"). ⏳ Merge. 91 % ALM, 9 DSP left.
 ---
 
 ## Documentation discipline (read before starting work)
