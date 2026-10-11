@@ -995,8 +995,9 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
 - [x] Benches: `run_disp_fit.sh --red` ALL GREEN (F33-F38); the "raster filled" fixtures moved to mode 3 with
       no display, byte-identical to main's; `run_disp_reader.sh` `fit_scope` / `fit_43`; `run_vid_equiv.sh`;
       `run_scaffold.sh` W111.
-- [ ] Fit; on the rig word 30 for 720x304 / 640x480 / 848x480 under Fit; the maintainer's look on a
-      wide-mode TV.
+- [x] On .201 (`history.md` §48): under Fit at 480i, 720x304 -> 720 x 360, 640x480 -> 540 x 480, 848x480 -> 716 x 480,
+      HDMI 16 : 9, errors 0; Fill unchanged (the control). First fit SEED 5 MARGINAL (100.45 / 98.98); a sweep follows.
+- [ ] A passing seed; the maintainer's look on a TV in its wide mode.
 
 ## Phase 7 — For integrators
 

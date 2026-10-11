@@ -1677,3 +1677,23 @@ chroma core):
 .201 afterwards: `_Other/H264_20261011.rbf` is the SEED 4 interface 1.1 build (the clients load the newest).
 The chroma build is kept as `H264_20261010.rbf.seed2_hdmi480_black`. `video_mode=2`, the old ini as
 `MiSTer.ini.bak_videomode8`.
+
+## 48. Analog Aspect Fit, the anamorphic 16:9 fit (fix/fit-anamorphic, 2026-10-11; issue #11)
+
+`analog.md` §5a. Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at
+1.78:1. Now Letterbox for a 16:9 display: wider letterboxed, narrower (4:3) pillarboxed, HDMI Auto 16:9.
+
+**On .201** (`H264_fit169_MARGINAL_20261011_2117.rbf`, SEED 5 first roll, clk_dec 100.45 / 98.98 -- above the
+96.43 it runs at; synthetic x264 High clips, `h264play`), Video Output Interlaced, Analog Aspect Fit:
+
+| clip | word 30 / 80 | the raw raster (a field) | `ar_x : ar_y` |
+|---|---|---|---|
+| 720x304 (2.37:1) | 720 x 360 at (0, 60) | field lines 30-209, columns 0-719 | 16 : 9 |
+| 640x480 (4:3) | 540 x 480 at (90, 0) | every line, columns 90-629 | 16 : 9 |
+| 848x480 | 716 x 480 at (2, 0) | every line, columns 2-717 | 16 : 9 |
+
+Every one `disp_fit_ref.py`'s, `raster_lb` 0, errors 0, late 0. The issue's numbers: the 720x304 clip was 720 x 480
+(each circle 1.33x taller than wide in wide mode); at 360 lines it is 2.37:1 on the 16:9 screen. **Control:** Progressive
+with Analog Aspect Auto (Fill) on the rig's 720x480 HDMI mode as before -- 720x304 A' (720 x 304 snapped, `raster_lb` 1,
+`ar` the display's 720 : 480), 640x480 filled with the exact aspect 640 : 480. Not yet: the maintainer's eye on a TV in
+its wide mode.
