@@ -352,6 +352,6 @@ A change that cannot be made that way is a new major version (2.0), never a sile
 
 - **1.0** -- the first published version, frozen under the rules above.
 - **1.1** -- the layout unchanged. Audio your program wrote ahead of its video can no longer stop
-  the picture: while the queued audio is ahead of the clock, a late picture is shown late instead
-  of moving the clock back ([Audio](audio.md#how-the-core-plays-it)). A program built for 1.1
-  refuses a 1.0 core.
+  the picture: a late picture is shown late instead of moving the clock back, unless the audio
+  has run dry or come late since it last waited ahead ([Audio](audio.md#how-the-core-plays-it)).
+  A program built for 1.1 refuses a 1.0 core.

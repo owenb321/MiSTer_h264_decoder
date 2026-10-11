@@ -1554,7 +1554,7 @@ a 1.1 core). The clip is 40 s of 720x480 at 29.97 (x264, no B-frames: `--pts`) w
 |---|---|---|
 | `--pcm-lead 6000` | plays to its end, ~0.9 s late (6 - 5.12 s: under `LATE_MAX`), no re-anchor | -- |
 | `--pcm-lead 10000` | **stuck**: 3 access units consumed, the clock 2.6 s in 12 s, 2 re-anchors, the ring full: `h264play` gave up at access unit 333 ("Connection timed out") | **plays to its end**: the clock 41.6 s in 42 s, 0 re-anchors, every picture shown ~4.9 s late (`disp_late` 1,194), `aud_gap` 0 |
-| 1.0.0's Jellyfin client, the film, Play 5046.4 s (Part A's freeze, `history.md` §45) | froze: the clock 21.1 s in 60.5 s, 6 re-anchors | plays: the clock 73.4 s in 76.3 s; `aud_q_rec` reached 256 and no re-anchor came of it |
+| 1.0.0's Jellyfin client, the film, Play 5046.4 s (Part A's freeze, `history.md` §45) | froze: the clock 21.1 s in 60.5 s, 6 re-anchors | plays, with one re-anchor after the queue ran dry: the clock 73.4 s in 76.3 s; `aud_q_rec` reached 256 without one; 316 pictures late and 647 starved refreshes before it settled |
 
 On the 1.1 core the Jellyfin run's one later re-anchor came after the audio ran dry (`aud_q_rec` 0, an
 underrun). That is the stall's case, where the 1.0 recovery is kept: the audio then waited, played, and the

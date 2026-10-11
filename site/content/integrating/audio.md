@@ -28,7 +28,8 @@ without one continues from the one before it. The library's
   gives you is usually right. But 256 records of 20 ms are only 5.12 s. Some sources put their
   audio further ahead than that in the stream (a server's live transcode after a seek has been
   seen 6 s ahead). If you write them in that order, the core stops reading with the video
-  behind that audio still unread, and that video arrives late. A 1.1 core keeps playing (below),
+  behind that audio still unread, and that video arrives late: by how far the audio leads past
+  those 5.12 s (a 6 s lead alone leaves it under a second late). A 1.1 core keeps playing (below),
   but the picture is then behind the sound for as long as the audio stays that far ahead, and a
   1.0 core could stop the picture altogether. So hold such audio back: write an AUDIO
   record only when its time is at most about one second past the newest video access unit you

@@ -981,7 +981,8 @@ the identity").
       layout's version 1.1; benches `run_disp_anc.sh` X7-X10, `run_aud_play.sh` `[lead]` A12 / A13,
       `run_disp_sched.sh` heldlead, all GREEN and `--red`; fit SEED 4 103.8 / 102.73 PASS; **on .201** (control
       arm first, `history.md` §46): an audio lead of 10 s stuck the 1.0 core and plays to its end on 1.1, and
-      1.0.0's Jellyfin client plays the film's freezing open. ⏳ The maintainer's round; merge.
+      1.0.0's Jellyfin client plays the film's freezing open, with one re-anchor after its queue ran dry (6 on
+      1.0, frozen). ⏳ The full `run_disp_sched.sh --red`; the maintainer's round; merge.
 
 ## Phase 7 — For integrators
 

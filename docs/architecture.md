@@ -770,8 +770,8 @@ audio within a second never gets there.
   its pictures are only ~0.9 s late (6 - 5.12 s), under `LATE_MAX`. A lead past ~8 s does: **`--pcm-lead
   10000` stuck the 1.0 core** (3 access units, 2 re-anchors, the program's write timed out) **and plays to
   its end on 1.1** (0 re-anchors, every picture ~4.9 s late, no silence). 1.0.0's Jellyfin client with the
-  film's freezing open plays on 1.1 (73 s of clock in 76 s); its one later re-anchor followed the audio
-  running dry, the stall rule.
+  film's freezing open plays on 1.1 (73 s of clock in 76 s, against 21 s in 60 s on 1.0); its one later
+  re-anchor followed the audio running dry, the stall rule.
 
 ### The pause and volume word (program word 34, a u32)
 
