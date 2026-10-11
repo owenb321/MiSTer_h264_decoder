@@ -1644,7 +1644,12 @@ byte-identical `.rbf` (sha256 `e20b2ef3...`), its report on `X0_Y7_N1`.
 - The gate is FAIL on the SEED 2 report and PASS on SEED 4's, MiSTer_DVD's and UMD's current ones. The
   siblings carry the same `sys/` and the same exposure (`harvest.md` "Fixes exchanged").
 - "X0_Y5 is the counter Main writes" is inferred: every working fit uses it and the one failing placement
-  does not. The proof is the CTS on a fit that the pin forced back (below).
+  does not. The proof is the CTS on a fit that the pin forced back:
+  - `a83a388` + the two pins, refitted at SEED 2 (BUILD_DATE `261010`): the report shows `X0_Y5_N1`
+    (`hdmi_pll_check` PASS). clk_dec was MARGINAL: the pins re-place the design. The build is
+    `H264_chroma_MARGINAL_20261011_1906.rbf`, a test build only.
+  - On .201 the HDMI clock measured 27.000 MHz at `video_mode=2`, 74.250 at `0` and 148.500 at `8`.
+    The same netlist without the pins had measured 135 / 148.5 / 148.5.
 - The release skill's smoke test now reads `mister.py hdmi` at `video_mode=2`.
 
 **Also measured the same day** (the maintainer's "480p looks jagged", PC desktop at 640x480; .201 on the
