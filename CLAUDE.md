@@ -344,8 +344,8 @@ the fixed clients: "all tests look good"). 91 % ALM, 9 DSP left.
 (fitword, iface1, chromafull) put `pll_hdmi`'s output on a counter Main never reprograms: 720x480 at 135 MHz (a black
 TV), 720p at 120 Hz, 1080p fine. `sys/sys.tcl` pins the PLL and its counter, `tools/hdmi_pll_check.sh` gates every fit
 report (fatal on `--release`), `tools/mister.py hdmi` measures the real clock. Fit SEED 5 101.77 / 101.58 PASS
-(`H264_hdmi480sweep_20261011_1951.rbf`); on .201 27.000 / 74.250 / 148.500 MHz. Not merged; DVD / UMD have the same
-exposure (not hit: `harvest.md`). Released 1.0.0 (SEED 12) is not affected.
+(`H264_hdmi480sweep_20261011_1951.rbf`); on .201 27.000 / 74.250 / 148.500 MHz. **✅ MERGED (PR #12)**, verified on .201
+(the clock measured). DVD / UMD have the same exposure (not hit: `harvest.md`). Released 1.0.0 (SEED 12) is not affected.
 ---
 
 ## Documentation discipline (read before starting work)

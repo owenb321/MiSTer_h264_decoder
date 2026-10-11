@@ -1572,7 +1572,7 @@ Restored afterwards:
 - the 1.1 core kept as `H264_20261011.rbf.iface1_1` (inactive), the chroma build the active newest;
 - 1.0.0's `jellyfin` and `h264player` back in place, the fixed ones beside them as `*.jftranscode`.
 
-## 47. A black TV at 720x480 HDMI: the HDMI PLL's output counter (fix/hdmi480-black, 2026-10-11)
+## 47. A black TV at 720x480 HDMI: the HDMI PLL's output counter (fix/hdmi480-black, 2026-10-11; ✅ MERGED (PR #12))
 
 **How it was found.** The maintainer had reported 480p "looking jagged" and wanted to compare HDMI output
 at 720x480 with the 1080p they had been using. .201's `MiSTer.ini` went from `video_mode=8` to `video_mode=2`,
