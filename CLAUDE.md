@@ -353,8 +353,9 @@ normalised quotient, `lb` 0), narrower pillarboxed (`ow = round(405 A / B)`; 4:3
 the maintainer's choices), the native snap as Letterbox's (mine, recorded). Fill (mode 3) unchanged; the benches' "raster
 filled" cases moved to mode 3 with no display (goldens byte-identical to main's). `run_disp_fit.sh --red` (F33-F38),
 `run_disp_reader.sh` (`fit_scope` / `fit_43`), `run_vid_equiv.sh`, `run_scaffold.sh --red` (W111) GREEN. Fit SEED 5 first
-roll MARGINAL 100.45 / 98.98 (93 % ALM), a sweep for a passing seed; on .201 under Fit at 480i 720x304 -> 720 x 360,
-640x480 -> 540 x 480, 848x480 -> 716 x 480, HDMI 16 : 9, errors 0; Fill unchanged. ⏳ A passing seed; the maintainer's eye
+roll MARGINAL 100.45 / 98.98; **sweep SEED 1 PASS 101.91 / 102.68** (93 % ALM, HDMI gate PASS,
+`H264_fit169sweep_20261011_2130.rbf`, smoke on .201: HDMI 27.000 MHz); on .201 under Fit at 480i 720x304 -> 720 x 360,
+640x480 -> 540 x 480, 848x480 -> 716 x 480, HDMI 16 : 9, errors 0; Fill unchanged. ⏳ The maintainer's eye
 on a TV in its wide mode; no interface change.
 ---
 

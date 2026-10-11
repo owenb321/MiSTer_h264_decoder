@@ -1697,3 +1697,6 @@ Every one `disp_fit_ref.py`'s, `raster_lb` 0, errors 0, late 0. The issue's numb
 with Analog Aspect Auto (Fill) on the rig's 720x480 HDMI mode as before -- 720x304 A' (720 x 304 snapped, `raster_lb` 1,
 `ar` the display's 720 : 480), 640x480 filled with the exact aspect 640 : 480. Not yet: the maintainer's eye on a TV in
 its wide mode.
+
+**The swept build** (SEED 1 PASS 101.91 / 102.68, `H264_fit169sweep_20261011_2130.rbf`) on .201: the 720x304 clip under Fit at
+480i 720 x 360 at (0, 60), `ar` 16 : 9, errors 0; HDMI 27.000 MHz (VIC 3) -- the PLL pin holds on this seed.

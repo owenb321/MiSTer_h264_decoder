@@ -997,7 +997,8 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
       `run_scaffold.sh` W111.
 - [x] On .201 (`history.md` §48): under Fit at 480i, 720x304 -> 720 x 360, 640x480 -> 540 x 480, 848x480 -> 716 x 480,
       HDMI 16 : 9, errors 0; Fill unchanged (the control). First fit SEED 5 MARGINAL (100.45 / 98.98); a sweep follows.
-- [ ] A passing seed; the maintainer's look on a TV in its wide mode.
+- [x] A passing seed: SEED 1 101.91 / 102.68, HDMI gate PASS, smoke on .201 (720 x 360, HDMI 27.000 MHz).
+- [ ] The maintainer's look on a TV in its wide mode.
 
 ## Phase 7 — For integrators
 
