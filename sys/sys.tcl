@@ -168,3 +168,12 @@ set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:sys/build_id.tcl"
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
 
+
+# H264-FORK (2026-10-11, docs/history.md S47): pin pll_hdmi's site and its output counter. Main retunes
+# the HDMI clock by rewriting the PHYSICAL C counter 0 and the VCO (Main_MiSTer video.cpp setPLL:
+# pll_cfg register 5, counter select 0). A fit that put outclk_0 on another counter (SEED 2 of three
+# branches: PLLOUTPUTCOUNTER_X0_Y7_N1) kept the compiled /3 under the new VCO and sent 720x480 at 135 MHz
+# (black) and 1280x720 at 148.5 MHz (120 Hz); 1080p, the compiled clock, looked fine. X0_Y5_N1 is the
+# counter every working fit used (and MiSTer_DVD's / UMD's). tools/hdmi_pll_check.sh gates the fit report.
+set_location_assignment FRACTIONALPLL_X0_Y1_N0 -to "pll_hdmi:pll_hdmi|pll_hdmi_0002:pll_hdmi_inst|altera_pll:altera_pll_i|altera_cyclonev_pll:cyclonev_pll|altera_cyclonev_pll_base:fpll_0|fpll"
+set_location_assignment PLLOUTPUTCOUNTER_X0_Y5_N1 -to "pll_hdmi:pll_hdmi|pll_hdmi_0002:pll_hdmi_inst|altera_pll:altera_pll_i|altera_cyclonev_pll:cyclonev_pll|counter[0].output_counter"

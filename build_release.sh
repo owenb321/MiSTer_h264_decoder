@@ -245,6 +245,23 @@ else
     echo "WARNING: packing a build with a DEAD data path (see above) — it will look correct in sim." >&2
 fi
 
+# HDMI clock gate (tools/hdmi_pll_check.sh): pll_hdmi's output on the physical counter Main
+# reprograms. A fit with it elsewhere closes timing and shows 1080p, and sends every other HDMI
+# mode at the wrong pixel clock (720x480 at 135 MHz: a black TV) -- three SEED 2 builds shipped
+# to the rig so (docs/history.md S47). sys/sys.tcl pins it; this proves the pin held.
+# Advisory on a dev build, fatal on --release.
+if HPLL_OUT=$("$(dirname "$0")/tools/hdmi_pll_check.sh" "output_files/${PROJECT}.fit.rpt" 2>&1); then
+    echo "$HPLL_OUT"
+else
+    echo "$HPLL_OUT" >&2
+    if [[ "$RELEASE_GATE" -eq 1 ]]; then
+        echo "ERROR: --release build refused: the HDMI pixel clock would be wrong in every mode but 1080p." >&2
+        trap - EXIT
+        exit 1
+    fi
+    echo "WARNING: packing a build whose HDMI clock is WRONG below 1080p (see above)." >&2
+fi
+
 echo ">> Packing compressed .rbf -> ${OUT}"
 quartus_cpf -c -o bitstream_compression=on "$SOF" "$OUT"
 

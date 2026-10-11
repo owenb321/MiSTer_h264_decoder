@@ -1689,6 +1689,13 @@ This core's own (`H264-FORK`):
   the SDIO low bits), enabled by `emu`'s new output **`VGA_DITHER`** (the OSD's Analog Dither,
   `status[19]`, Off by default: a 24-bit analog board does not band). HDMI and the scaler-to-VGA path
   (`vgas_o`) are untouched.
+- **`sys.tcl`: `pll_hdmi` pinned to `FRACTIONALPLL_X0_Y1_N0`, its output to
+  `PLLOUTPUTCOUNTER_X0_Y5_N1`** (2026-10-11, `history.md` §47). Main sets each HDMI mode's pixel clock
+  by rewriting the PLL's physical C counter 0 (and its VCO). A fit that put the output on another
+  counter kept the compiled ÷3, so every mode but 1080p ran at the wrong clock (720x480 at 135 MHz:
+  black). `tools/hdmi_pll_check.sh` reads the fit report (`build_release.sh`: advisory on a dev build,
+  fatal on `--release`). The stock framework has the same exposure: MiSTer_DVD's and UMD's current fits
+  happen to sit on X0_Y5 (`harvest.md` "Fixes exchanged").
 
 ## Clock-domain crossings
 

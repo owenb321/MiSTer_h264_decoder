@@ -384,6 +384,15 @@
 #     recon_dpb 2 -- the decoder's own paths, re-placed by the netlist change. Second sweep (detached): **SEED 4
 #     first, 103.8/102.73 PASS**, clk_vid 92.04/88.43 PASS; ALM 39,014 (93 %), RAM 421, DSP 109,
 #     H264_audclocksweep_20261011_0503.rbf (30a71bf). SEED 4 pinned.
+#   2026-10-11 (fix/hdmi480-black: pll_hdmi + its output counter pinned in sys/sys.tcl, docs/history.md S47;
+#     CORE_VERSION dev-hdmi480): 48935fa SEED 4 first roll 98.12/98.72 MARGINAL, clk_vid 91.65/90.58 PASS, clk_mem
+#     94.67/92.17 (ungated); hdmi_pll_check PASS (X0_Y5_N1); ALM 39,055 (93 %), RAM 421, DSP 109,
+#     H264_hdmi480_MARGINAL_20261011_1924.rbf. A sweep follows.
+#     Sweep (detached): 2 100.67/101.55, **SEED 5 101.77/101.58 PASS**, clk_vid 91.65/87.57 PASS; hdmi_pll_check
+#     PASS (X0_Y5_N1); ALM 39,047 (93 %), RAM 421, DSP 109, H264_hdmi480sweep_20261011_1951.rbf (a02caba). SEED 5 pinned.
+#   2026-10-11 (the same pins on a83a388, the chroma build, SEED 2, BUILD_DATE pinned 261010 -- a test, not
+#     shipped): MARGINAL on clk_dec; output counter X0_Y5_N1; on .201 HDMI 27.000 / 74.250 / 148.500 MHz (was 135 /
+#     148.5 / 148.5 without the pins). Kept in .sim/hdmi480/seed2fix.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -486,4 +495,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 4
+set_global_assignment -name SEED 5

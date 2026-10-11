@@ -57,7 +57,10 @@ An interface change that breaks existing HPS programs is at least a minor bump b
    has every number) and `docs/history.md`.
 5. **Smoke-test on hardware** (`hil-testing`): flash, boot, confirm the OSD About line
    reads `H264 v<semver> <yymmdd>` and, once the input path exists, that the reference
-   feeder plays a stream.
+   feeder plays a stream. **Measure the HDMI clock below 1080p:** with `video_mode=2` (720x480)
+   in the rig's `MiSTer.ini`, load the build and run `tools/mister.py hdmi`. It must read 27.000 MHz.
+   A fit can close timing and still send 720x480 at 135 MHz, a black TV (`docs/history.md` §47);
+   `build_release.sh --release` gates the fit report for it, and this proves it on the rig.
 6. **Publish.**
    Push `main`, then `tools/publish_draft.sh v<semver> --notes <scratch>/relnotes.md` creates
    the draft and dispatches `.github/workflows/package.yml`; smoke-test the draft, then

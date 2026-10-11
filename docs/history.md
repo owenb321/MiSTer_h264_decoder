@@ -1571,3 +1571,109 @@ direct-play film, the file player, Moonlight. The 1 s logger over the 24 minutes
 Restored afterwards:
 - the 1.1 core kept as `H264_20261011.rbf.iface1_1` (inactive), the chroma build the active newest;
 - 1.0.0's `jellyfin` and `h264player` back in place, the fixed ones beside them as `*.jftranscode`.
+
+## 47. A black TV at 720x480 HDMI: the HDMI PLL's output counter (fix/hdmi480-black, 2026-10-11)
+
+**How it was found.** The maintainer had reported 480p "looking jagged" and wanted to compare HDMI output
+at 720x480 with the 1080p they had been using. .201's `MiSTer.ini` went from `video_mode=8` to `video_mode=2`,
+and after a reboot the TV showed nothing from the core. It reported 480p, but the screen was black and the
+OSD was invisible. The menu core and the DVD core were fine at the same mode.
+
+**Whether the picture or the HDMI signal was missing.** The core's own raster was fine: `h264player`'s
+browser was in the screenshot and it moved as the maintainer navigated. Every Video Output (Auto / 480i,
+Progressive, Native) was black, so it was not one raster.
+
+**Bisected by build** (the maintainer watching the TV, each build loaded by MGL with no program running):
+
+| build | SEED | 720x480 HDMI |
+|---|---|---|
+| `resovlp_20261003_2016` (before hd_raster) | 6 | bars |
+| `hd-raster_20261004_0243` (stage A), `_1539` (stage B) | 6, 3 | bars |
+| `rumble_20261004_2256`, `fitfilter_20261005_1611`, `arm-codecs_20261006_0327` | | bars |
+| `colour_20261007_1245` | 13 | bars |
+| `fitword_20261007_2343` | **2** | **black** |
+| `iface1_20261008_0042` | **2** | **black** (twice) |
+| `20261009` (release 1.0.0) | 12 | bars (twice) |
+| `chromafull_20261010_1752` (.201's installed core) | **2** | **black** (three times) |
+| `audclocksweep_20261011_0503` (main, interface 1.1) | 4 | bars |
+
+The fault was not a code change. Only the three SEED 2 fits were black.
+
+**Bisected by HDMI mode** (the chroma build, SEED 2): 640x480@60 gave no signal (SEED 4: bars),
+720x576@50 black, 1280x720 and 1920x1080 bars. Custom timings (`720,480,60`, and the 9-field CEA form at
+27.0 / 27.1 MHz) were refused by the TV ("Invalid format").
+
+**Measured, not watched.** The ADV7513 measures the TMDS clock for HDMI audio. Its read-only CTS (registers
+0x04-0x06) is `f_pix x N / (128 x 48 kHz)`, so with Main's N of 6144 the CTS in kHz is the pixel clock.
+`i2cget -y 1 0x39` from the rig's Linux reads it; `tools/mister.py hdmi` now does it.
+
+| build | `video_mode` | pixel clock (CTS) | VIC detected | should be |
+|---|---|---|---|---|
+| SEED 4 | 2 (720x480) | 27.000 MHz | 3 | 27.000 |
+| SEED 2 | 2 (720x480) | **135.000 MHz** | 3 | 27.000 |
+| SEED 2 | 0 (1280x720) | **148.500 MHz** | 4 | 74.250 |
+| SEED 4 | 0 (1280x720) | 74.250 MHz | 4 | 74.250 |
+| SEED 2 | 8 (1920x1080) | 148.500 MHz | 16 | 148.500 |
+
+**The detected VIC does not see the clock.** It read 480p60 for a 300 Hz signal. A first check by VIC alone
+seemed to rule the cause out.
+
+**The mechanism.** Main sets each mode's pixel clock by retuning `pll_hdmi` through `pll_cfg`
+(Main_MiSTer `video.cpp` `setPLL`): it picks a VCO of at least 400 MHz (M, N, the fractional K) and
+rewrites **physical C counter 0** (register 5, counter select 0). The PLL's compiled setting is 148.5 MHz:
+VCO 445.5 MHz, C = 3. In the SEED 2 fits the fitter put `outclk_0` on the counter at
+`PLLOUTPUTCOUNTER_X0_Y7_N1`; every working fit had it on `X0_Y5_N1`. Main's C write landed on a counter
+that drives nothing, so only the VCO followed the mode:
+- 720x480 came out at 405 / 3 = 135 MHz (858 x 525 at ~300 Hz: black);
+- 720x576 likewise;
+- 640x480 at 402.8 / 3 = 134 MHz (no signal);
+- 1280x720 at 445.5 / 3 = 148.5 MHz (720p at **120 Hz**, which this 4K TV accepted, so it looked fine);
+- 1080p, the compiled clock, was right.
+
+Timing closed in every one of these fits: the timing analysis cannot see a counter that Main reprograms
+at run time. **Every 720p test on a SEED 2 build (iface1, fitword, the chroma build) ran on a 120 Hz signal.**
+
+Reproduced from source: `a83a388` refitted at SEED 2 with BUILD_DATE pinned to `261010` gave a
+byte-identical `.rbf` (sha256 `e20b2ef3...`), its report on `X0_Y7_N1`.
+
+**The fix.**
+- `sys/sys.tcl` (`H264-FORK`) pins `pll_hdmi` to `FRACTIONALPLL_X0_Y1_N0` and its output counter to
+  `PLLOUTPUTCOUNTER_X0_Y5_N1`.
+- `tools/hdmi_pll_check.sh` reads the fit report: the PLL's site, its output counter, and any ignored pin.
+  `build_release.sh` runs it after the netlist canary: advisory on a dev build, fatal on `--release`.
+- The gate is FAIL on the SEED 2 report and PASS on SEED 4's, MiSTer_DVD's and UMD's current ones. The
+  siblings carry the same `sys/` and the same exposure (`harvest.md` "Fixes exchanged").
+- "X0_Y5 is the counter Main writes" is inferred: every working fit uses it and the one failing placement
+  does not. The proof is the CTS on a fit that the pin forced back:
+  - `a83a388` + the two pins, refitted at SEED 2 (BUILD_DATE `261010`): the report shows `X0_Y5_N1`
+    (`hdmi_pll_check` PASS). clk_dec was MARGINAL: the pins re-place the design. The build is
+    `H264_chroma_MARGINAL_20261011_1906.rbf`, a test build only.
+  - On .201 the HDMI clock measured 27.000 MHz at `video_mode=2`, 74.250 at `0` and 148.500 at `8`.
+    The same netlist without the pins had measured 135 / 148.5 / 148.5.
+- The release skill's smoke test now reads `mister.py hdmi` at `video_mode=2`.
+- **The branch's fit:** SEED 4's first roll was MARGINAL (98.12 / 98.72). In the sweep **SEED 5 passed at 101.77 / 101.58**,
+  clk_vid 91.65 / 87.57, with `hdmi_pll_check` PASS (`H264_hdmi480sweep_20261011_1951.rbf`, `a02caba`; the SEED
+  LEDGER has the rest).
+  - On .201 HDMI measured 27.000 / 74.250 / 148.500 MHz at `video_mode` 2 / 0 / 8.
+  - The test chart in Native (a 720x480 raster on that HDMI mode) is 100.00 % exact against `disp_golden`; errors,
+    late and fetch-late are all 0.
+  - Progressive could not be scored on that HDMI mode. ascal stores a 4:3 picture at its output width (640), and
+    `shot` reads ascal's buffer: the raw shot is 640 wide, so it is a different instrument from the 720-wide raster.
+
+**Also measured the same day** (the maintainer's "480p looks jagged", PC desktop at 640x480; .201 on the
+chroma core):
+- The core is exact against `disp_golden`'s render of ffmpeg's decode on all three outputs (99.66-100 %,
+  max 2 codes).
+- .201's ini (`composite_sync=1`, `vga_scaler=0`, no saved `H264.CFG`) makes Video Output's Auto
+  Interlaced. HDMI Deinterlace defaults to Weave, so motion combs on HDMI.
+- A 640-wide picture on the 720-wide SD rasters is a 9:8 upscale through the 2-tap blend: 1-px lines
+  alternate 1 px (peak 242) / 2 px (peak 155). Native (HDMI) is 1:1.
+- The Moonlight client's GRAPHICS flag turns Anti-Twitter Auto on at 480i.
+- The PC's Sunshine (KMS grab) delivered the desktop at a linear 0.59 gain (white 255 -> 150). The
+  September captures reach full white, so this is new on the PC side.
+- `shot --scaled` is Main's own nearest-neighbour resize, not ascal's filtered output.
+- The maintainer's Analog Aspect Fit report (a scope film too tall on a wide-mode TV) became issue #11.
+
+.201 afterwards: `_Other/H264_20261011.rbf` is the SEED 4 interface 1.1 build (the clients load the newest).
+The chroma build is kept as `H264_20261010.rbf.seed2_hdmi480_black`. `video_mode=2`, the old ini as
+`MiSTer.ini.bak_videomode8`.

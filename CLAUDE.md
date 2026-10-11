@@ -340,6 +340,12 @@ layout unchanged, word 1 / the library 0x0101 (a 1.1 program refuses a 1.0 core)
 core and plays on 1.1, and 1.0.0's Jellyfin client plays the film's freezing open (one re-anchor after its queue ran dry;
 6 on 1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN; ✅ HW-CONFIRMED 2026-10-11 (the maintainer's round on .201 with
 the fixed clients: "all tests look good"). 91 % ALM, 9 DSP left.
+**The HDMI clock below 1080p (`fix/hdmi480-black`, 2026-10-11; `docs/history.md` §47)**: three SEED 2 fits
+(fitword, iface1, chromafull) put `pll_hdmi`'s output on a counter Main never reprograms: 720x480 at 135 MHz (a black
+TV), 720p at 120 Hz, 1080p fine. `sys/sys.tcl` pins the PLL and its counter, `tools/hdmi_pll_check.sh` gates every fit
+report (fatal on `--release`), `tools/mister.py hdmi` measures the real clock. Fit SEED 5 101.77 / 101.58 PASS
+(`H264_hdmi480sweep_20261011_1951.rbf`); on .201 27.000 / 74.250 / 148.500 MHz. Not merged; DVD / UMD have the same
+exposure (not hit: `harvest.md`). Released 1.0.0 (SEED 12) is not affected.
 ---
 
 ## Documentation discipline (read before starting work)
@@ -761,6 +767,12 @@ here. Numbers quoted are from THOSE netlists.
   Quartus by the Docker container name; the MiSTer has no `pkill`.
 - **Check the polarity of any active-low signal shown as a flag** before concluding a
   watchdog is firing.
+- **A PASS fit can send the wrong HDMI clock** (2026-10-11, `history.md` §47): Main retunes
+  `pll_hdmi` by rewriting its physical C counter 0. Three SEED 2 fits put the output on another
+  counter: 1080p fine, 720x480 at 135 MHz (a black TV), 720p at 120 Hz. `sys/sys.tcl` pins the
+  counter, `tools/hdmi_pll_check.sh` gates every fit report (fatal on `--release`), and
+  `tools/mister.py hdmi` measures the real clock (the ADV7513's CTS; its detected VIC cannot see
+  the clock).
 
 ---
 
