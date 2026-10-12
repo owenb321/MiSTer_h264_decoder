@@ -1700,3 +1700,11 @@ its wide mode.
 
 **The swept build** (SEED 1 PASS 101.91 / 102.68, `H264_fit169sweep_20261011_2130.rbf`) on .201: the 720x304 clip under Fit at
 480i 720 x 360 at (0, 60), `ar` 16 : 9, errors 0; HDMI 27.000 MHz (VIC 3) -- the PLL pin holds on this seed.
+
+**The maintainer's round on HDMI** (an LG B7 in 16:9, .201's `video_mode=2`, 720x480): every clip letterboxed -- the
+core's 16:9 made ascal a 720x405 window inside the 720x480 frame, and Main sends that mode as CEA's 16:9 VIC 3, so the
+TV stretched it again. Fixed (`fit_fill`): on Main's 720x480 / 720x576 modes Fit gives the scaler the mode's own shape,
+the frame filled (`H264_fit169_20261012_0103.rbf`, SEED 1 first roll PASS 102.99 / 101.87): the scaler's output is the
+full 720 x 480, `ar` 720 : 480. The maintainer: 640x480 pillarboxed with bars at the sides only, the 720x304 film
+"letterboxed properly", 848x480 fills the screen; the remaining crop is the TV's overscan (the signal carries all 480
+lines).

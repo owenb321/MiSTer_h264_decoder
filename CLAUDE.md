@@ -355,8 +355,10 @@ filled" cases moved to mode 3 with no display (goldens byte-identical to main's)
 `run_disp_reader.sh` (`fit_scope` / `fit_43`), `run_vid_equiv.sh`, `run_scaffold.sh --red` (W111) GREEN. Fit SEED 5 first
 roll MARGINAL 100.45 / 98.98; **sweep SEED 1 PASS 101.91 / 102.68** (93 % ALM, HDMI gate PASS,
 `H264_fit169sweep_20261011_2130.rbf`, smoke on .201: HDMI 27.000 MHz); on .201 under Fit at 480i 720x304 -> 720 x 360,
-640x480 -> 540 x 480, 848x480 -> 716 x 480, HDMI 16 : 9, errors 0; Fill unchanged. ⏳ The maintainer's eye
-on a TV in its wide mode; no interface change.
+640x480 -> 540 x 480, 848x480 -> 716 x 480, HDMI 16 : 9, errors 0; Fill unchanged. Then, from the maintainer's round on HDMI (an LG B7, 720x480 mode): Main sends 720x480 / 720x576 as
+16:9 (VIC 3 / 18), so on those modes Fit fills the HDMI frame (`fit_fill`, W112 / W113); refit SEED 1 PASS 102.99 / 101.87
+(`H264_fit169_20261012_0103.rbf`); the maintainer: all three clips correct on HDMI. ⏳ An analog TV in its wide mode; no
+interface change.
 ---
 
 ## Documentation discipline (read before starting work)

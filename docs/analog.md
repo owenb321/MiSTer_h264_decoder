@@ -269,6 +269,13 @@ filling the raster was right there; streams and files carry a scope film at its 
 - **HDMI's Auto aspect is 16:9 under Fit** (the maintainer's choice; `emu`'s `fit_169`,
   `check_emu_wiring` pins it, `run_scaffold.sh` W111): HDMI shows the raster as the wide-mode TV
   does, so a Fit picture is undistorted on HDMI too (before: 4:3, which suited only the old stretch).
+  **Except on Main's SD HDMI modes**, 720x480 and 720x576: Main sends them as CEA's 16:9 VIC 3 / 18
+  (the AVI frame's 16:9 bit set; Main's `vmodes` table), so the TV stretches the frame to 16:9 itself,
+  while ascal treats it as square pixels -- 16:9 there gave a 720x405 window, letterboxed and too wide
+  on the TV (found on .201 with the maintainer, `history.md` §48). There Auto gives the scaler the
+  mode's own shape (`fit_fill`: `HDMI_WIDTH : HDMI_HEIGHT`, the frame filled), and the TV's stretch does
+  what a wide-mode analog TV does (`check_emu_wiring` `fit_fill`, W112 / W113). Forced 4:3 / 16:9 are
+  left as they are.
 
 **What did not change:** Fill (mode 3: HDMI in Progressive with Analog Aspect Auto) keeps the
 raster filled when the picture is not wider than the display, and A' when it is; with no display
