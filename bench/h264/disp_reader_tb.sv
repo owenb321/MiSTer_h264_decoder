@@ -10,8 +10,9 @@
 //   +want=FILE     the expected raster (default the 720x480 frame's)
 //   +store=FILE +w=N +hf=N   the store and its coded size in macroblocks (default the 720x480 one)
 //   +cuy4 +cl=N +cr=N +ct=N +cb=N   its crop;  +sarw=N +sarh=N  its SAR (default 1:1)
-//   +fmode=N       the fit's mode (0 Letterbox, 1 Crop, 2 Fit; default 2: 720x480 is then the
-//                  identity on both rasters)
+//   +fmode=N       the fit's mode (0 Letterbox, 1 Crop, 2 Fit, 3 Fill; default 3 -- with no display, the
+//                  raster filled: 720x480 is then the identity on both rasters. Fit was that before
+//                  issue #11; it is now the anamorphic 16:9 fit)
 //   +field         the store holds fields (pic_field)   +single  one field (pic_single)
 //   +mode=N        deint_mode (0 Weave, 1 Bob, 2 Blend)  +parity=N  pic_parity
 //   +colour=N      (0.16) pic_colour, the picture's colour code (default 1, BT.601 limited)
@@ -65,7 +66,7 @@ reg [2:0] colswap = 3'd0;         // +colswap=N: the code changed to N in the mi
 reg [7:0] w_mbs = 8'd45, hf_mbs = 8'd30;
 reg [40:0] crop = '0;
 reg [15:0] sarw = 16'd1, sarh = 16'd1;
-reg [1:0]  fmode = 2'd2;
+reg [1:0]  fmode = 2'd3;
 reg [1:0]  flt = 2'd0;
 wire [2:0] f_hpf, f_vpf;
 wire [12:0] f_ow, f_oh; wire [13:0] f_ox0, f_oy0; wire [27:0] f_sx, f_sy; wire [1:0] f_dh, f_dv;

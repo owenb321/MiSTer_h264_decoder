@@ -50,7 +50,7 @@ module vid_equiv_tb;
     logic [7:0]  w_mbs = 8'd45, hf_mbs = 8'd30;
     logic [40:0] crop = '0;
     logic [15:0] sarw = 16'd1, sarh = 16'd1;
-    logic [1:0]  fmode = 2'd2;
+    logic [1:0]  fmode = 2'd3;   // Fill with no display: the raster filled (main's Fit before issue #11)
     logic        vis = 1'b1, sess = 1'b0, at_en = 1'b0;
     int          refs = 3, iv;
     string       tfile, sfile, ostem, root;

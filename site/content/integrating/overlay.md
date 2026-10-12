@@ -44,7 +44,10 @@ mode exactly, two `8888` pages need a 1920x1080 mode. A row as wide as the large
 than two pages fit, draw a shorter canvas: the core centres it.
 
 **Draw for the output's shape.** On an analog display the 720 x 480 output fills a 4:3
-screen, so its pixels are slightly narrow (8:9). The pixel's shape on HDMI is `ar_x / ar_y`
+screen, so its pixels are slightly narrow (8:9) -- except with Analog Aspect set to Fit, which is
+for a TV in its 16:9 wide mode: the output is then shown at 16:9 (word 47 reads 16 : 9 on HDMI too --
+on a 720x480 / 720x576 HDMI mode the mode's own size, 720 : 480 or 720 : 576, since the TV stretches
+that mode to 16:9 itself), so its pixels are wide (32:27). The pixel's shape on HDMI is `ar_x / ar_y`
 x `raster_h / raster_w` (the library's `rs.aspect * rs.h / rs.w`): on a native output it is
 usually square. On HDMI the shape is what the core tells
 the scaler: word 47's `ar_x : ar_y` is the width to height of the whole output (word

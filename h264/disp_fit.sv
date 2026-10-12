@@ -10,12 +10,16 @@
 //   Wc = 16 W - 2 (left + right)            Hc = 16 HF - (cuy4 ? 4 : 2)(top + bottom)
 //   a crop leaving nothing (Wc or Hc <= 0): ignored, crop_bad -- the coded picture whole
 //   A = Wc sar_w, B = Hc sar_h;  wide = 3 A >= 4 B          (at least as wide as 4:3)
-//   Fit: 720 x 480.  Letterbox & wide / Crop & narrow: ow = 720, oh = round(640 B / A);
+//   Letterbox & wide / Crop & narrow: ow = 720, oh = round(640 B / A);
 //   otherwise oh = 480, ow = round(540 A / B)         (round(n/d) = floor((2n + d) / 2d))
+//   Fit (issue #11, docs/analog.md §5): the anamorphic 16:9 fit -- Letterbox computed for the 16:9 a
+//   TV in its wide mode shows the raster at. Wider than 16:9 (9 A > 16 B): ow = 720, oh = round(rh P /
+//   Q), P = 16 B, Q = 9 A -- A''s path below with a 16 x 9 display (lb stays 0: the raster is the
+//   analog 4:3 one); else oh = 480, ow = round(405 A / B) (720 x 9/16; 16:9 itself fills the raster)
 //   On the 576-line raster (`pal`, P6 step 6, docs/analog.md §10: 720 dots = 4:3 at 576
 //   lines, a pixel 16:15): 576 for 480 and oh = round(768 B / A) (540 is the same on both)
-//   Fill (mode 3, HDMI in Progressive with Analog Aspect Auto; docs/hdmi_raster.md §3a): Fit,
-//   but A' when the picture is wider than the HDMI display (A disp_h > B disp_w, disp_w and
+//   Fill (mode 3, HDMI in Progressive with Analog Aspect Auto; docs/hdmi_raster.md §3a): the raster
+//   filled, 720 x rh (before issue #11 that was Fit's rule too), but A' when the picture is wider than the HDMI display (A disp_h > B disp_w, disp_w and
 //   disp_h nonzero): ow = 720, oh = round(rh B disp_w / (A disp_h)) -- B disp_w and A disp_h
 //   (40 bits: two serial 12-step shift-add products, no DSP) shifted down together until
 //   A disp_h fits 28 bits -- and the vertical alone snaps (oh within 3.5 % of Hc <= rh -> Hc);
@@ -24,7 +28,7 @@
 //   nat_h raster -- ow, oh = Wc, Hc, steps 1.0, no snap, centred: ox0 = (nat_w - Wc) >> 1, oy0 =
 //   (nat_h - Hc) >> 1; the mode is ignored
 //   ow, oh clamped to [2, 8191] (clamp: an absurd SAR under Crop); the native snap: under
-//   Letterbox / Crop, within 3.5 % of Wc x Hc on both axes -> Wc x Hc (1:1)
+//   Letterbox / Crop / Fit, within 3.5 % of Wc x Hc on both axes -> Wc x Hc (1:1)
 //   ox0 = (720 - ow) >>> 1, oy0 = (480 - oh) >>> 1    (576 - oh; negative under Crop)
 //   sx = (Wc << 16) / ow, sy = (Hc << 16) / oh        (Q.16, floor)
 //   dh = pow2floor(sx) <= 8, >= 2 when 16 W > 1,024 (fitted only: the native line holds 2,048 samples
@@ -63,7 +67,7 @@ module disp_fit (
     input  wire  [40:0] crop,              // {cuy4, left, right, top, bottom} (recon_top)
     input  wire  [15:0] sar_w,             // resolved: 1:1 when unspecified (aspect_vui)
     input  wire  [15:0] sar_h,
-    input  wire  [1:0]  mode,              // 0 Letterbox, 1 Crop, 2 Fit, 3 Fill (Fit, or A' when wider than the display)
+    input  wire  [1:0]  mode,              // 0 Letterbox, 1 Crop, 2 Fit (anamorphic 16:9), 3 Fill (720 x rh, or A' when wider than the display)
     input  wire  [11:0] disp_w,            // A': the HDMI display's shape (HDMI_WIDTH x HDMI_HEIGHT; 0 = none)
     input  wire  [11:0] disp_h,
     input  wire         nat,               // stage 2: the native raster (raster_geom), nat_w x nat_h
@@ -116,6 +120,7 @@ module disp_fit (
     logic [11:0] k_dw, k_dh, k_nw, k_nh;
     logic        k_nat;
     logic        r_lb;
+    logic        r_w16;                    // (issue #11) Fit: wider than 16:9 -- the quotient is oh
     logic        k_area;                   // (§11b) the Area pre-filter
     logic [27:0] r_sy;
     logic [1:0]  r_dhl2, r_dvl2;
@@ -147,6 +152,7 @@ module disp_fit (
     wire [37:0] b768 = {1'b0, r_b, 9'd0} + {2'd0, r_b, 8'd0};   // 768 B = 512 B + 256 B (576 lines)
     wire [12:0] rh   = k_pal ? 13'd576 : 13'd480;               // the raster's lines
     wire [37:0] a540 = {1'b0, r_a, 9'd0} + {6'd0, r_a, 4'd0} + {7'd0, r_a, 3'd0} + {8'd0, r_a, 2'd0}; // 540 A
+    wire [37:0] a405 = {2'd0, r_a, 8'd0} + {3'd0, r_a, 7'd0} + {6'd0, r_a, 4'd0} + {8'd0, r_a, 2'd0} + {10'd0, r_a}; // 405 A (Fit)
     // A': rh x (B disp_w), shifted below 2^28: 480 P = 512 P - 32 P, 576 P = 512 P + 64 P (38 bits)
     wire [37:0] p_rh = k_pal ? ({1'b0, pm_p[27:0], 9'd0} + {4'd0, pm_p[27:0], 6'd0})
                              : ({1'b0, pm_p[27:0], 9'd0} - {5'd0, pm_p[27:0], 5'd0});
@@ -199,7 +205,7 @@ module disp_fit (
         if (!rst_n) begin
             last_set <= '0; have <= 1'b0; st <= S_IDLE; st_ret <= S_IDLE; busy <= 1'b0;
             k_w <= '0; k_hf <= '0; k_cuy4 <= 1'b0; k_il <= 1'b0; k_at <= 1'b0; k_pal <= 1'b0; k_l <= '0; k_r <= '0; k_t <= '0; k_b <= '0;
-            k_sw <= '0; k_sh <= '0; k_mode <= '0; k_dw <= '0; k_dh <= '0; r_lb <= 1'b0; lb <= 1'b0;
+            k_sw <= '0; k_sh <= '0; k_mode <= '0; k_dw <= '0; k_dh <= '0; r_lb <= 1'b0; lb <= 1'b0; r_w16 <= 1'b0;
             k_nat <= 1'b0; k_nw <= '0; k_nh <= '0;
             pm_p <= '0; pm_q <= '0; pm_b <= '0; pm_a <= '0; pm_mw <= '0; pm_mh <= '0; pm_cnt <= '0;
             t_wc <= '0; t_hc <= '0; r_wc <= '0; r_hc <= '0; r_lx <= '0; r_ty <= '0;
@@ -220,7 +226,7 @@ module disp_fit (
                     k_sh <= (sar_w == 16'd0 || sar_h == 16'd0) ? 16'd1 : sar_h;
                     k_mode <= mode; k_il <= il; k_at <= at; k_pal <= pal; k_dw <= disp_w; k_dh <= disp_h;
                     k_nat <= nat; k_nw <= nat_w; k_nh <= nat_h; k_area <= area;
-                    r_lb <= 1'b0;
+                    r_lb <= 1'b0; r_w16 <= 1'b0;
                     st <= S_CROP;
                 end
                 S_CROP: begin
@@ -256,7 +262,11 @@ module disp_fit (
                         pm_p <= '0; pm_q <= '0; pm_b <= {12'd0, r_b}; pm_a <= {12'd0, r_a};
                         pm_mw <= k_dw; pm_mh <= k_dh; pm_cnt <= 4'd12;
                         st <= S_PM;
-                    end else if (k_mode[1]) begin                // Fit (and Fill without a display)
+                    end else if (k_mode == 2'd2) begin           // Fit: is it wider than 16:9? (A''s products, 16 x 9)
+                        pm_p <= '0; pm_q <= '0; pm_b <= {12'd0, r_b}; pm_a <= {12'd0, r_a};
+                        pm_mw <= 12'd16; pm_mh <= 12'd9; pm_cnt <= 4'd12;
+                        st <= S_PM;
+                    end else if (k_mode == 2'd3) begin           // Fill without a display: the raster filled
                         r_ow <= 13'd720; r_oh <= rh; r_clamp <= 1'b0;
                         st <= S_SNAP;
                     end else begin
@@ -290,10 +300,16 @@ module disp_fit (
                     if (pm_cnt == 4'd1) st <= S_PWIDE;
                 end
                 S_PWIDE: begin
-                    if (pm_q > pm_p) begin                       // A disp_h > B disp_w: A'
-                        r_lb <= 1'b1;
+                    if (pm_q > pm_p) begin                       // A disp_h > B disp_w: A' (Fit: wider than 16:9)
+                        r_lb <= (k_mode == 2'd3);
+                        r_w16 <= 1'b1;
                         st <= S_PSH;
-                    end else begin                               // not wider: filled (Fit)
+                    end else if (k_mode == 2'd2) begin           // Fit, not wider: ow = round(405 A / B)
+                        dv_n <= {1'b0, a405, 1'b0} + {12'd0, r_b};
+                        dv_d <= {r_b, 1'b0};
+                        dv_rem <= '0; dv_q <= '0; dv_cnt <= 6'd40;
+                        st <= S_DIV; st_ret <= S_Q1;
+                    end else begin                               // Fill, not wider: the raster filled
                         r_ow <= 13'd720; r_oh <= rh; r_clamp <= 1'b0;
                         st <= S_SNAP;
                     end
@@ -311,9 +327,12 @@ module disp_fit (
                 end
                 S_Q1: begin
                     // the quotient: ow or oh, clamped to [2, 8191]; the other side is the raster's
-                    if (k_mode == 2'd3) begin                    // A': the letterbox's height
+                    if (k_mode == 2'd3 || (k_mode == 2'd2 && r_w16)) begin   // A' / Fit wider than 16:9: the letterbox's height
                         r_ow <= 13'd720;
                         r_oh <= (dv_q > 40'd8191) ? 13'd8191 : (dv_q < 40'd2) ? 13'd2 : dv_q[12:0];
+                    end else if (k_mode == 2'd2) begin          // Fit, 16:9 or narrower: the pillarbox's width
+                        r_oh <= rh;
+                        r_ow <= (dv_q > 40'd8191) ? 13'd8191 : (dv_q < 40'd2) ? 13'd2 : dv_q[12:0];
                     end else if ((k_mode == 2'd0) == r_wide) begin
                         r_ow <= 13'd720;
                         r_oh <= (dv_q > 40'd8191) ? 13'd8191 : (dv_q < 40'd2) ? 13'd2 : dv_q[12:0];
@@ -326,7 +345,7 @@ module disp_fit (
                 end
                 S_SNAP: begin
                     r_snap <= 1'b0;
-                    if (!k_nat && !k_mode[1] && (dw1000 <= wc35) && (dh1000 <= hc35)) begin
+                    if (!k_nat && k_mode != 2'd3 && (dw1000 <= wc35) && (dh1000 <= hc35)) begin
                         r_ow <= {1'b0, r_wc}; r_oh <= {1'b0, r_hc}; r_snap <= 1'b1;
                     end else if (r_lb && (dh1000 <= hc35) && ({1'b0, r_hc} <= rh)) begin
                         r_oh <= {1'b0, r_hc}; r_snap <= 1'b1;      // A': the vertical alone, 1:1

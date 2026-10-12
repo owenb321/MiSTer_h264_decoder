@@ -18,7 +18,7 @@ serration pulses, so a TV interlaces the two fields correctly.
 
 - **Analog Aspect** fits pictures that are not 4:3 inside the 4:3 screen: Letterbox (black
   bars, the whole picture; what Auto does here), Crop (fills the screen, cuts the sides) or
-  Fit (stretches, for a TV in a wide mode).
+  Fit (for a TV in its 16:9 wide mode: every picture at its true shape once the TV stretches it).
 - **Anti-Twitter**: a detail one line tall -- small text, a game's HUD, a thin horizontal
   edge -- flickers on an interlaced screen. Anti-Twitter softens the picture vertically just
   enough that it stops. On **Auto** (the default) it filters game streams, desktops and the

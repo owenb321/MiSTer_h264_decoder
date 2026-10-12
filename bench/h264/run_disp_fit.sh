@@ -4,7 +4,7 @@
 # text (bench/h264/disp_fit_tb.sv). The model's own rectangle is checked against ffmpeg's
 # scale (force_original_aspect_ratio) first: an independent oracle for the geometry.
 #
-# GREEN: the model's selftest; the model vs ffmpeg (11 sizes x Letterbox / Crop); the RTL vs
+# GREEN: the model's selftest; the model vs ffmpeg (12 sizes x Letterbox / Crop / Fit); the RTL vs
 #   the model on 8,000 vectors (400 cases x 4 modes x progressive / 480i / 480i with
 #   anti-twitter / 576p / 576i with anti-twitter: every flag, the decimation, the
 #   anti-twitter cap and the 576-line raster reached, the bench's coverage check); the
@@ -48,6 +48,13 @@
 #   Smooth could see it; the budget's row cap 2 dv <= 8 -- the cost alone excludes dv 8: 8 x 180 > 1,300)
 #   F31 anti-twitter's two boxes dropped past the budget           -> [pf]
 #   F32 the budget's cost threshold past a 480p line's two rows     -> [pf]
+#   (issue #11, Fit: the anamorphic 16:9 fit)
+#   F33 Fit's pillarbox by 540 (Letterbox's 4:3) for 405             -> [size]
+#   F34 Fit's letterbox published as A' (lb)                          -> [lb]
+#   F35 Fit's test against 4:3 for 16:9                               -> [size]
+#   F36 Fit's snap never taken                                        -> [flag]
+#   F37 Fit's quotient always the height (the pillarbox's width as oh) -> [size]
+#   F38 Fit's "wider" not cleared between computations               -> [size]
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim
@@ -106,7 +113,7 @@ PYEOF
   mut F29 "wire [2:0]  ah   = (ah_t[29:16] >= 14'd4) ? 3'd4 : {1'b0, ah_t[17:16]};" "wire [2:0]  ah   = ah_t[18:16];" pf
   mut F31 "vpf <= (r_vpf != 3'd0 && !fit2 && !k_at) ? 3'd0 : r_vpf;" "vpf <= (r_vpf != 3'd0 && !fit2) ? 3'd0 : r_vpf;" pf
   mut F32 "wire        fit2 = (dvn <= 4'd4) && (c2 <= 16'd1300);" "wire        fit2 = (dvn <= 4'd4) && (c2 <= 16'd1900);" pf
-  mut F6 "if (!k_nat && !k_mode[1] && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "if (1'b0) begin" flag
+  mut F6 "if (!k_nat && k_mode != 2'd3 && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "if (1'b0) begin" flag
   mut F7 "r_ty <= k_cuy4 ? {k_t, 2'b00} : {1'b0, k_t, 1'b0};" "r_ty <= {1'b0, k_t, 1'b0};" crop
   mut F8 "if (t_wc[13] || t_wc == 14'd0 || t_hc[13] || t_hc == 14'd0) begin" "if (t_wc[13] || t_wc == 14'd0) begin" flag
   mut F9 "                    busy <= 1'b0;
@@ -124,7 +131,16 @@ PYEOF
   mut F19 "pm_mw <= k_dw; pm_mh <= k_dh; pm_cnt <= 4'd12;" "pm_mw <= k_dw; pm_mh <= k_dw; pm_cnt <= 4'd12;" lb
   mut F20 "slide <= k_at; lb <= r_lb;" "slide <= k_at; lb <= 1'b0;" lb
   mut F21 "wire [13:0] ox_d = (k_nat ? {2'd0, k_nw} : 14'd720) - {1'b0, r_ow};" "wire [13:0] ox_d = 14'd720 - {1'b0, r_ow};" size
-  mut F22 "if (!k_nat && !k_mode[1] && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "if ((k_nat || !k_mode[1]) && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "flag|size"
+  mut F22 "if (!k_nat && k_mode != 2'd3 && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "if ((k_nat || k_mode != 2'd3) && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "flag|size"
+  # (issue #11) Fit
+  mut F33 "dv_n <= {1'b0, a405, 1'b0} + {12'd0, r_b};" "dv_n <= {1'b0, a540, 1'b0} + {12'd0, r_b};" size
+  mut F34 "r_lb <= (k_mode == 2'd3);" "r_lb <= 1'b1;" lb
+  mut F35 "pm_mw <= 12'd16; pm_mh <= 12'd9;" "pm_mw <= 12'd4; pm_mh <= 12'd3;" size
+  mut F36 "if (!k_nat && k_mode != 2'd3 && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" "if (!k_nat && !k_mode[1] && (dw1000 <= wc35) && (dh1000 <= hc35)) begin" flag
+  mut F37 "if (k_mode == 2'd3 || (k_mode == 2'd2 && r_w16)) begin" "if (k_mode == 2'd3 || k_mode == 2'd2) begin" size
+  mut F38 "r_lb <= 1'b0; r_w16 <= 1'b0;
+                    st <= S_CROP;" "r_lb <= 1'b0;
+                    st <= S_CROP;" size
 fi
 [ $fail -eq 0 ] && echo "== ALL GREEN ==" || echo "== FAILURES =="
 exit $fail

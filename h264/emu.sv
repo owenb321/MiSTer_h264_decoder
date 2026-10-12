@@ -171,7 +171,7 @@ assign LOCKED    = locked & vid_locked;
 //     30 chars and splits CONF_STR on those characters.
 //   * This string is INSIDE CONF_STR = inside the netlist. Changing it re-rolls the
 //     pinned fitter SEED, so change it once per branch and never per commit.
-`define CORE_VERSION "dev-hdmi480"
+`define CORE_VERSION "dev-fit169"
 
 // The OSD definition. Every option, button and file extension here MUST be documented
 // in the manual: tools/docs_check.py parses this block (by its terminator, never a
@@ -1184,7 +1184,8 @@ disp_ctl disp_ctl_inst (
 );
 
 // ---- the fit (P6 step 3, docs/analog.md §5): where and how big the shown picture is ----
-// Analog Aspect (MiSTer_DVD's option: Fit the anamorphic stretch, Letterbox, Crop) fits the
+// Analog Aspect (MiSTer_DVD's option: Fit -- since issue #11 the anamorphic 16:9 fit, the picture
+// letterboxed / pillarboxed for a TV in its wide mode --, Letterbox, Crop) fits the
 // picture inside the 4:3 raster, on either output mode -- a 31 kHz analog display (a VGA
 // CRT, an external scaler) needs it in Progressive too (decided 2026-09-29, the maintainer:
 // found on the RetroTINK). Its Auto: Letterbox at 480i; in Progressive the raster is FILLED
@@ -1755,7 +1756,8 @@ wire auto_wide  = stream_live ? live_wide : (played ? last_wide_q : idle_wide);
 // sys_top a VIDEO_ARX / ARY with bit 12 set is not a ratio but an explicit output size in
 // pixels (`arxy`: wcalc <= arx) -- a 13-bit ratio would size the HDMI picture literally. A
 // shift keeps the ratio to 1 part in 2,048 (no gcd needed); portrait arrives as 9 : 16.
-// When the raster carries a 4:3 fit (480i, or Analog Aspect set explicitly) Auto is 4:3.
+// When the raster carries a 4:3 fit (480i, or Analog Aspect set explicitly) Auto is 4:3 -- 16:9 under
+// Fit, the anamorphic 16:9 fit (issue #11: fit_169 below).
 // Idle, the display's own (auto_wide). Registered: the inputs change only with the shown picture.
 reg  [27:0] ex_x, ex_y;
 reg  [11:0] ar_x, ar_y;
@@ -1792,10 +1794,23 @@ always @(posedge clk_sys) begin
 	else                begin ar_x <= ex_x[11:0];  ar_y <= ex_y[11:0];  end
 end
 wire ar_exact   = (status[2:1] == 2'd0) && !raster_fitted && (stream_live || played);
+// (issue #11, decided 2026-10-11 with the maintainer) Analog Aspect Fit is the anamorphic 16:9 fit: the
+// raster is meant to be shown at 16:9, as a TV in its wide mode shows it, so HDMI's Auto is 16:9 there --
+// except on Main's SD modes, 720x480 and 720x576, which it sends as CEA's 16:9 VIC 3 / 18 (the AVI frame's
+// 16:9 bit set): the TV stretches that frame to 16:9 itself, so the raster FILLS it (the mode's own shape,
+// HDMI_WIDTH : HDMI_HEIGHT -- ascal treats the frame as square pixels). Found on .201 2026-10-11 with the
+// maintainer: 16:9 there gave a 720x405 window, letterboxed on the TV (docs/analog.md §5a).
+wire fit_169    = raster_fitted && (status[9:8] == 2'd1);
+reg  hdmi_sd16  = 1'b0;                        // Main's 720x480 / 720x576 HDMI modes (16:9 VIC 3 / 18)
+always @(posedge clk_sys)
+	hdmi_sd16 <= (HDMI_WIDTH == 12'd720) && (HDMI_HEIGHT == 12'd480 || HDMI_HEIGHT == 12'd576);
+reg  [11:0] hdmi_w_q = 12'd720, hdmi_h_q = 12'd480;
+always @(posedge clk_sys) begin hdmi_w_q <= HDMI_WIDTH; hdmi_h_q <= HDMI_HEIGHT; end
+wire fit_fill   = fit_169 && hdmi_sd16 && (status[2:1] == 2'd0);   // Auto under Fit on an SD mode: the frame filled
 wire ar_wide    = (status[2:1] == 2'd1) ? 1'b0 :
-                  (status[2:1] == 2'd2) ? 1'b1 : (auto_wide && !raster_fitted);
-assign VIDEO_ARX = ar_exact ? {1'b0, ar_x} : ar_wide ? 13'd16 : 13'd4;   // bit 12 clear: a ratio
-assign VIDEO_ARY = ar_exact ? {1'b0, ar_y} : ar_wide ? 13'd9  : 13'd3;
+                  (status[2:1] == 2'd2) ? 1'b1 : (fit_169 || (auto_wide && !raster_fitted));
+assign VIDEO_ARX = ar_exact ? {1'b0, ar_x} : fit_fill ? {1'b0, hdmi_w_q} : ar_wide ? 13'd16 : 13'd4;   // bit 12 clear: a ratio
+assign VIDEO_ARY = ar_exact ? {1'b0, ar_y} : fit_fill ? {1'b0, hdmi_h_q} : ar_wide ? 13'd9  : 13'd3;
 
 // =========================================================================
 // The status block (docs/architecture.md "The HPS interface, v0.1": the control block's

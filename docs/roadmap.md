@@ -985,6 +985,24 @@ the identity").
       1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN (43 mutations). The maintainer's round on .201
       (2026-10-11): "all tests look good". Merged (PR #10).
 
+## Analog Aspect Fit, the anamorphic 16:9 fit (issue #11, found 2026-10-11 on the rig) -- 🔧 built on `fix/fit-anamorphic`
+
+`docs/analog.md` §5a. Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at
+1.78:1. Decided 2026-10-11 with the maintainer: Fit = Letterbox for a 16:9 display (a wider picture
+letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's Auto 16:9 under Fit.
+- [x] `disp_fit` (mode 2; Fill unchanged), `disp_fit_ref.py` (the rule, Fit in the ffmpeg oracle), `emu`
+      `fit_169`; the manual's Fit and Aspect Ratio entries.
+- [x] Benches: `run_disp_fit.sh --red` ALL GREEN (F33-F38); the "raster filled" fixtures moved to mode 3 with
+      no display, byte-identical to main's; `run_disp_reader.sh` `fit_scope` / `fit_43`; `run_vid_equiv.sh`;
+      `run_scaffold.sh` W111.
+- [x] On .201 (`history.md` §48): under Fit at 480i, 720x304 -> 720 x 360, 640x480 -> 540 x 480, 848x480 -> 716 x 480,
+      HDMI 16 : 9, errors 0; Fill unchanged (the control). First fit SEED 5 MARGINAL (100.45 / 98.98); a sweep follows.
+- [x] A passing seed: SEED 1 101.91 / 102.68, HDMI gate PASS, smoke on .201 (720 x 360, HDMI 27.000 MHz).
+- [x] The maintainer's look on HDMI (an LG B7 in 16:9, 2026-10-12): the SD HDMI modes now filled under Fit (`fit_fill`,
+      `history.md` §48); the 4:3 / scope / 16:9 clips correct, the remaining crop the TV's overscan. Fit SEED 1 PASS
+      102.99 / 101.87 (`H264_fit169_20261012_0103.rbf`).
+- [ ] Not yet: an analog TV in its wide mode.
+
 ## Phase 7 — For integrators
 
 - [x] ✅ **The interface frozen at 1.0 -- MERGED (PR fj#43)** (2026-10-07; `architecture.md` "Version 1.0",

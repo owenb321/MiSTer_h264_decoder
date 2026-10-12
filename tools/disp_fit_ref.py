@@ -9,8 +9,12 @@ independent oracle (--check-ffmpeg).
     fit(w_mbs, hf_mbs, crop, sar_w, sar_h, mode, il) -> dict
       crop  = (cuy4, left, right, top, bottom)  frame_crop_*_offset + the vertical unit bit
       mode  = 'letterbox' | 'crop' | 'fit' | 'fill'
-              (Analog Aspect; HDMI in Progressive with Analog Aspect Auto = 'fill': 'fit', but A'
-              when the picture is wider than the HDMI display -- docs/hdmi_raster.md §3a)
+              (Analog Aspect; HDMI in Progressive with Analog Aspect Auto = 'fill': the raster
+              filled (720 x RH), but A' when the picture is wider than the HDMI display --
+              docs/hdmi_raster.md §3a. 'fit' (issue #11, docs/analog.md §5): the anamorphic 16:9
+              fit -- Letterbox computed for a 16:9 display (a TV in its wide mode stretches the
+              raster to 16:9), so a wider picture is letterboxed (oh = round(RH x 16 B / 9 A),
+              normalised as A' is), a narrower one pillarboxed (ow = round(405 A / B)), 16:9 fills)
       dw, dh = (A') the HDMI display's shape, HDMI_WIDTH x HDMI_HEIGHT (0 = none: no A');
               used by 'fill' only
       nat, nw, nh = (stage 2, docs/hdmi_raster.md §3b) the native raster, nw x nh
@@ -113,7 +117,19 @@ def fit(w_mbs, hf_mbs, crop=(0, 0, 0, 0, 0), sar_w=1, sar_h=1, mode='letterbox',
         sh = max(0, q.bit_length() - 28)
         p, q = p >> sh, q >> sh
         ow, oh = RW, rdiv(RH * p, q)
-    elif mode in ('fit', 'fill'):
+    elif mode == 'fit' and 9 * wc * sar_w > 16 * hc * sar_h:
+        # (issue #11) Fit, wider than 16:9: the width filled, letterboxed for the 16:9 the TV shows
+        # the raster at -- A''s quotient with a 16 x 9 display: oh = round(RH P / Q), P = 16 B and
+        # Q = 9 A shifted down together until Q fits 28 bits (P < Q: it fits too)
+        p, q = 16 * hc * sar_h, 9 * wc * sar_w
+        sh = max(0, q.bit_length() - 28)
+        p, q = p >> sh, q >> sh
+        ow, oh = RW, rdiv(RH * p, q)
+    elif mode == 'fit':
+        # (issue #11) Fit, 16:9 or narrower: the height filled, pillarboxed -- 720 x 9/16 = 405 for
+        # the Letterbox rule's 540 (720 x 3/4); 16:9 itself fills the raster (both branches agree)
+        ow, oh = rdiv(405 * wc * sar_w, hc * sar_h), RH
+    elif mode == 'fill':
         ow, oh = RW, RH
     elif (mode == 'letterbox') == wide:               # letterbox & wide, or crop & narrow
         ow, oh = RW, rdiv(KH * hc * sar_h, wc * sar_w)
@@ -126,7 +142,7 @@ def fit(w_mbs, hf_mbs, crop=(0, 0, 0, 0, 0), sar_w=1, sar_h=1, mode='letterbox',
     # the native snap: within 3.5 % of the picture's own size on both axes (BT.601's 10:11
     # against the raster's 8:9 is 2 %), shown 1:1 -- a 480 -> 469 rescale softens every
     # line to correct a geometry error overscan hides
-    snap = not nat and mode in ('letterbox', 'crop') and 1000 * abs(ow - wc) <= 35 * wc and 1000 * abs(oh - hc) <= 35 * hc
+    snap = not nat and mode in ('letterbox', 'crop', 'fit') and 1000 * abs(ow - wc) <= 35 * wc and 1000 * abs(oh - hc) <= 35 * hc
     if snap:
         ow, oh = wc, hc
     # A': the vertical alone snaps (the width is the raster's, resampled anyway): a letterbox
@@ -210,9 +226,9 @@ def selftest():
     # the spec's extreme side: 12 x 128 macroblocks (192 x 2048: 1,536 <= 1,620), 480i
     f = fit(12, 128, il=True)
     assert f['oh'] == 480 and f['dv'] == 4 and f['dh'] == 2, f
-    # (0.11) 1280x720, 3,600 macroblocks: Fit at 480p stores 640 (dh 2: the line <= 1,024) and
+    # (0.11) 1280x720, 3,600 macroblocks: filled at 480p stores 640 (dh 2: the line <= 1,024) and
     # steps 1.5 rows (dv 1); letterboxed at 480i 720x405 -> the vertical step 1.78 (dv 1)
-    f = fit(80, 45, mode='fit')
+    f = fit(80, 45, mode='fill')
     assert (f['ow'], f['oh'], f['dh'], f['dv']) == (720, 480, 2, 1), f
     f = fit(80, 45, il=True)
     assert f['ow'] == 720 and f['dh'] == 2, f
@@ -231,9 +247,9 @@ def selftest():
     # identity positions: 720x480 at 8:9 -> source x = j exactly, weight 0
     f = fit(45, 30, sar_w=8, sar_h=9)
     assert all(src_pos(f, j, 'x') == (j, min(j + 1, 719), 0) for j in range(720))
-    # anti-twitter at the identity (720x480 Fit): line L's taps are rows L - 1 and L of the
+    # anti-twitter at the identity (720x480 filled): line L's taps are rows L - 1 and L of the
     # sliding boxes, weight 1/2 -- the (1, 2, 1); the first line clamps to box 0
-    f = fit(45, 30, mode='fit', il=True, at=True)
+    f = fit(45, 30, mode='fill', il=True, at=True)
     assert f['slide'] and f['dv'] == 1
     assert src_pos(f, 0, 'y') == (0, 0, 0) and src_pos(f, 1, 'y') == (0, 1, 128), src_pos(f, 1, 'y')
     assert all(src_pos(f, L, 'y') == (L - 1, L, 128) for L in range(1, 479))
@@ -284,15 +300,15 @@ def selftest():
     assert (f['ow'], f['oh'], f['ox0'], f['oy0'], f['dh'], f['dv'], f['wd']) == (1280, 720, 0, 0, 1, 1, 1280), f
     f = fit(128, 28, mode='fit', nat=True, nw=2048, nh=448)                   # the widest legal picture
     assert (f['ow'], f['dh'], f['wd']) == (2048, 1, 2048), f
-    # (§11b) the Area pre-filter. 1280x720 Fit at 480p: the Sharp control keeps the floor (dh 2, 640
+    # (§11b) the Area pre-filter. 1280x720 filled at 480p: the Sharp control keeps the floor (dh 2, 640
     # stored); Area keeps 1,280 columns: r 1.78 -> A 3, rows r 1.5 -> A 2
-    f = fit(80, 45, mode='fit')
+    f = fit(80, 45, mode='fill')
     assert (f['dh'], f['hpf'], f['vpf']) == (2, 0, 0), f
-    f = fit(80, 45, mode='fit', flt='area')
+    f = fit(80, 45, mode='fill', flt='area')
     assert (f['dh'], f['dv'], f['hpf'], f['vpf'], f['wd']) == (1, 1, 3, 2, 1280), f
-    # an upscale (480x272 Fit) and the identity: no pre-filter; native never
+    # an upscale (480x272 filled) and the identity: no pre-filter; native never
     for flt in FLT:
-        assert (fit(30, 17, mode='fit', flt=flt)['hpf'], fit(30, 17, mode='fit', flt=flt)['vpf']) == (0, 0)
+        assert (fit(30, 17, mode='fill', flt=flt)['hpf'], fit(30, 17, mode='fill', flt=flt)['vpf']) == (0, 0)
         assert fit(45, 30, sar_w=8, sar_h=9, flt=flt)['hpf'] == 0
         g = fit(80, 45, mode='fit', nat=True, nw=1280, nh=720, flt=flt)
         assert (g['hpf'], g['vpf'], g['dh']) == (0, 0, 1), g
@@ -308,9 +324,31 @@ def selftest():
     # anti-twitter is (4, 4, 0) under Area too (A <= 4)
     assert fit(54, 30, crop=(0, 0, 5, 0, 0), il=True, at=True, flt='area')['vpf'] == 4
     # the positions: the last tap one short of the crop (A > 0)
-    f = fit(80, 45, mode='fit', flt='area')
+    f = fit(80, 45, mode='fill', flt='area')
     k0, k1, w = src_pos(f, 719, 'x')
     assert k1 <= 1279 - 1 and src_pos(f, 0, 'x')[0] == 0, (k0, k1, w)
+    # (issue #11) Fit, the anamorphic 16:9 fit. The issue's 720x304 scope clip (2.37:1): letterboxed
+    # to 720 x 360 (480 x 16/9 / 2.37), 60 lines down; on the 576-line raster 432
+    f = fit(45, 19, mode='fit')
+    assert (f['ow'], f['oh'], f['ox0'], f['oy0'], f['lb'], f['snap']) == (720, 360, 0, 60, False, False), f
+    assert fit(45, 19, mode='fit', pal=True)['oh'] == 432
+    # 640x480 (4:3) pillarboxed to 540 (720 x 3/4), 90 columns in; 848x480 (a hair narrower than
+    # 16:9) 716; 1024x576 and 1280x720 (exactly 16:9) fill the raster, as before
+    f = fit(40, 30, mode='fit')
+    assert (f['ow'], f['oh'], f['ox0'], f['oy0']) == (540, 480, 90, 0), f
+    assert (fit(53, 30, mode='fit')['ow'], fit(53, 30, mode='fit')['oh']) == (716, 480)
+    for wm, hm in ((64, 36), (80, 45)):
+        for pal in (False, True):
+            g = fit(wm, hm, mode='fit', pal=pal)
+            assert (g['ow'], g['oh'], g['ox0'], g['oy0']) == (720, 576 if pal else 480, 0, 0), g
+    # an anamorphic 16:9 DVD-class picture (704x480 at 40:33) lands within 3.5 %: shown 1:1
+    f = fit(44, 30, sar_w=40, sar_h=33, mode='fit')
+    assert f['snap'] and (f['ow'], f['oh'], f['ox0']) == (704, 480, 8), f
+    # portrait (480x854) pillarboxed to 405 x 480 / 854 x 480 / 480 -> 128 columns
+    f = fit(30, 54, crop=(0, 0, 0, 0, 5), mode='fit')
+    assert (f['ow'], f['oh']) == (rdiv(405 * 480, 854), 480), f
+    # 'fill' with no display is the raster filled whatever the shape (the benches' identity)
+    assert (fit(40, 30, mode='fill')['ow'], fit(45, 19, mode='fill')['oh']) == (720, 480)
     print("disp_fit_ref selftest: PASS")
 
 
@@ -318,15 +356,17 @@ def check_ffmpeg():
     """the rectangle against ffmpeg's scale (force_original_aspect_ratio) + pad, on the
     raster's own pixel aspect: ffmpeg works in square pixels, so the raster is 640x480
     square (720 dots = 4:3) and the widths are compared after x 8/9 -- and (P6 step 6) the
-    576-line raster as 768x576 square, the widths compared after x 16/15"""
+    576-line raster as 768x576 square, the widths compared after x 16/15. Fit (issue #11) on the 16:9
+    the wide-mode TV shows the raster at: 854x480 / 1024x576 square, the widths after x 854/720 /
+    1024/720 (854 is 16:9 to 0.06 %: under half a pixel at 720)"""
     cases = [(640, 480), (720, 480), (854, 480), (720, 404), (352, 240), (480, 854),
-             (192, 2048), (2048, 192), (1024, 576), (480, 480), (320, 1600)]
+             (192, 2048), (2048, 192), (1024, 576), (480, 480), (320, 1600), (720, 304)]
     bad = 0
     for (w, h), pal in [(c, False) for c in cases] + [(c, True) for c in cases + [(720, 576), (1024, 576)]]:
-        for mode, far in (('letterbox', 'decrease'), ('crop', 'increase')):
+        for mode, far in (('letterbox', 'decrease'), ('crop', 'increase'), ('fit', 'decrease')):
             wm, hm = (w + 15) // 16, (h + 15) // 16
             f = fit(wm, hm, crop=(0, 0, (16 * wm - w) // 2, 0, (16 * hm - h) // 2), mode=mode, pal=pal)
-            sq_w, sq_h = (768, 576) if pal else (640, 480)
+            sq_w, sq_h = ((1024, 576) if pal else (854, 480)) if mode == 'fit' else ((768, 576) if pal else (640, 480))
             r = subprocess.run(
                 ['ffprobe', '-v', 'error', '-f', 'lavfi', '-i',
                  'color=black:size=%dx%d,scale=%d:%d:force_original_aspect_ratio=%s' % (w, h, sq_w, sq_h, far),
@@ -335,7 +375,8 @@ def check_ffmpeg():
                 fw, fh = (int(v) for v in r.stdout.strip().split(','))
             except ValueError:
                 print("  ffprobe gave no size for %dx%d %s: %s" % (w, h, mode, r.stderr.strip())); bad += 1; continue
-            ow_sq = f['ow'] * (16 / 15 if pal else 8 / 9)   # the fit's width in square pixels
+            ow_sq = f['ow'] * sq_w / 720 if mode == 'fit' else \
+                f['ow'] * (16 / 15 if pal else 8 / 9)        # the fit's width in square pixels
             ok = abs(ow_sq - fw) <= 1.5 and abs(f['oh'] - fh) <= 1
             print("  %-4s %4dx%-4d %-9s %s fit %4d(%6.1f sq) x %-4d  ffmpeg %4d x %-4d" %
                   ('ok' if ok else 'BAD', w, h, mode, '576' if pal else '480', f['ow'], ow_sq, f['oh'], fw, fh))
@@ -363,7 +404,11 @@ def vectors(n, path, seed=1):
              (54, 30, (0, 0, 5, 0, 0), 1, 1), (60, 30, (0, 0, 0, 0, 0), 1, 1),
              # (§11b) the filter: 1280x720 (the floor), 720x1280, 2048x448 and 192x2048 (the budget)
              (80, 45, (0, 0, 0, 0, 0), 1, 1), (45, 80, (0, 0, 0, 0, 0), 1, 1),
-             (128, 28, (0, 0, 0, 0, 0), 1, 1), (12, 128, (0, 0, 0, 0, 0), 1, 1)]
+             (128, 28, (0, 0, 0, 0, 0), 1, 1), (12, 128, (0, 0, 0, 0, 0), 1, 1),
+             # (issue #11) Fit: the 720x304 scope clip, 640x480, 848x480 (a hair narrower than 16:9),
+             # 704x480 at 40:33 (exactly 16:9: the snap), 1024x576 at 1:1 (exactly 16:9: filled)
+             (45, 19, (0, 0, 0, 0, 0), 1, 1), (40, 30, (0, 0, 0, 0, 0), 1, 1),
+             (53, 30, (0, 0, 0, 0, 0), 1, 1), (44, 30, (0, 0, 0, 0, 0), 40, 33)]
     displays = [(1920, 1080), (1280, 720), (1024, 768), (0, 0), (1280, 1024), (720, 480),
                 (3840, 2160), (1366, 768), (2560, 1080), (640, 480), (0, 1080), (4095, 1)]
     while len(cases) < n:
