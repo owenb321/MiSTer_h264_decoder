@@ -1678,7 +1678,7 @@ chroma core):
 The chroma build is kept as `H264_20261010.rbf.seed2_hdmi480_black`. `video_mode=2`, the old ini as
 `MiSTer.ini.bak_videomode8`.
 
-## 48. Analog Aspect Fit, the anamorphic 16:9 fit (fix/fit-anamorphic, 2026-10-11; issue #11)
+## 48. Analog Aspect Fit, the anamorphic 16:9 fit (fix/fit-anamorphic, 2026-10-11; issue #11; ✅ MERGED (PR #14))
 
 `analog.md` §5a. Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at
 1.78:1. Now Letterbox for a 16:9 display: wider letterboxed, narrower (4:3) pillarboxed, HDMI Auto 16:9.

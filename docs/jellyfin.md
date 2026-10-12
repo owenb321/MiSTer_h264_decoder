@@ -360,7 +360,8 @@ client to read.
 ## 9. Next concrete step
 
 The maintainer's turn on the rig: cast from a phone, the pad controls, a
-CRT at 480i. Then merge. v2 (the browse UI, LVGL) after.
+CRT at 480i. Then merge. v2 (the browse UI, LVGL) was dropped (the maintainer, 2026-10-12): the client
+stays a cast target.
 
 ## 10. As built (v1, 2026-10-01)
 
