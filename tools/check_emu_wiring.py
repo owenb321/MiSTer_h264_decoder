@@ -1053,6 +1053,16 @@ def main():
     if 'fit_169' not in terms(assign_of(src, 'ar_wide') or '') or 'raster_fitted' not in f169 \
             or "status[9:8]==2'd1" not in f169:
         bad('ar_wide', "Auto must be 16:9 under Analog Aspect Fit (fit_169 = raster_fitted && status[9:8] == 2'd1)")
+    # ... and on Main's SD HDMI modes (720x480 / 720x576: CEA 16:9 VIC 3 / 18, the TV stretches the frame) the
+    # frame filled: the mode's own shape to the scaler
+    sd = re.search(r'hdmi_sd16\s*<=\s*([^;]*);', src)
+    sdt = (sd.group(1) if sd else '').replace(' ', '')
+    ff = (assign_of(src, 'fit_fill') or '').replace(' ', '')
+    arx = (assign_of(src, 'VIDEO_ARX') or '').replace(' ', '')
+    if not ({'fit_169', 'hdmi_sd16'} <= terms(assign_of(src, 'fit_fill') or '')) or "status[2:1]==2'd0" not in ff \
+            or "HDMI_WIDTH==12'd720" not in sdt or "HDMI_HEIGHT==12'd480" not in sdt or "HDMI_HEIGHT==12'd576" not in sdt \
+            or "fit_fill?{1'b0,hdmi_w_q}" not in arx:
+        bad('fit_fill', "under Fit on an SD HDMI mode (720x480 / 720x576) Auto must give the scaler the mode's own shape")
     # P6 step 3: VIDEO_ARX / ARY with bit 12 set is an explicit SIZE in sys_top (arxy), not a
     # ratio: the exact aspect's terms are 12 bits and the assign keeps bit 12 clear
     for port, reg in (('VIDEO_ARX', 'ar_x'), ('VIDEO_ARY', 'ar_y')):

@@ -108,6 +108,7 @@
 #   W108 (docs/analog.md S12) the Analog Dither tied on (every board dithered) -> check_emu_wiring (VGA_DITHER)
 #   W109, W110 (interface 0.17, F5) word 30's fit_valid tied 1; fit_clamp reported with no picture shown
 #   W111 (issue #11) HDMI's Auto aspect 4:3 under Analog Aspect Fit (the anamorphic 16:9 fit) -> check_emu_wiring (ar_wide)
+#   W112, W113 (issue #11) Fit on an SD HDMI mode not filled (16:9 there: a letterboxed window); 720x576 left out -> check_emu_wiring (fit_fill)
 #       -> check_emu_wiring (st_fit_valid / st_fit_clamp)
 #   W80-W90 (hd_raster, docs/hd_raster.md S3) CLK_VIDEO back on clk_sys, the dot two clocks in three, a
 #           raster module on clk_sys, two bundle fields swapped, the bundle truncated, frame0 without its
@@ -407,6 +408,8 @@ PYEOF
   wmut W109 "wire        st_fit_valid    = sh_valid;" "wire        st_fit_valid    = 1'b1;" wiring st_fit_valid
   wmut W110 "wire        st_fit_clamp    = sh_valid & fit_clamp;" "wire        st_fit_clamp    = fit_clamp;" wiring st_fit_clamp
   wmut W111 "(fit_169 || (auto_wide && !raster_fitted))" "(auto_wide && !raster_fitted)" wiring ar_wide
+  wmut W112 "wire fit_fill   = fit_169 && hdmi_sd16 && (status[2:1] == 2'd0);" "wire fit_fill   = 1'b0;" wiring fit_fill
+  wmut W113 "(HDMI_HEIGHT == 12'd480 || HDMI_HEIGHT == 12'd576)" "(HDMI_HEIGHT == 12'd480)" wiring fit_fill
   wmut W101 "	.fit_hpf           (v_fit_hpf)," "	.fit_hpf           (3'd0)," wiring disp_reader.fit_hpf
   wmut L1 "wire stream_live = sh_valid;" "wire stream_live;" lint
   for f in "$RES"/*; do grep -v '^MUTFAIL$' "$f"; grep -q '^MUTFAIL$' "$f" && fail=1; done

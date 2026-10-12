@@ -1795,12 +1795,22 @@ always @(posedge clk_sys) begin
 end
 wire ar_exact   = (status[2:1] == 2'd0) && !raster_fitted && (stream_live || played);
 // (issue #11, decided 2026-10-11 with the maintainer) Analog Aspect Fit is the anamorphic 16:9 fit: the
-// raster is meant to be shown at 16:9, as a TV in its wide mode shows it, so HDMI's Auto is 16:9 there
+// raster is meant to be shown at 16:9, as a TV in its wide mode shows it, so HDMI's Auto is 16:9 there --
+// except on Main's SD modes, 720x480 and 720x576, which it sends as CEA's 16:9 VIC 3 / 18 (the AVI frame's
+// 16:9 bit set): the TV stretches that frame to 16:9 itself, so the raster FILLS it (the mode's own shape,
+// HDMI_WIDTH : HDMI_HEIGHT -- ascal treats the frame as square pixels). Found on .201 2026-10-11 with the
+// maintainer: 16:9 there gave a 720x405 window, letterboxed on the TV (docs/analog.md §5a).
 wire fit_169    = raster_fitted && (status[9:8] == 2'd1);
+reg  hdmi_sd16  = 1'b0;                        // Main's 720x480 / 720x576 HDMI modes (16:9 VIC 3 / 18)
+always @(posedge clk_sys)
+	hdmi_sd16 <= (HDMI_WIDTH == 12'd720) && (HDMI_HEIGHT == 12'd480 || HDMI_HEIGHT == 12'd576);
+reg  [11:0] hdmi_w_q = 12'd720, hdmi_h_q = 12'd480;
+always @(posedge clk_sys) begin hdmi_w_q <= HDMI_WIDTH; hdmi_h_q <= HDMI_HEIGHT; end
+wire fit_fill   = fit_169 && hdmi_sd16 && (status[2:1] == 2'd0);   // Auto under Fit on an SD mode: the frame filled
 wire ar_wide    = (status[2:1] == 2'd1) ? 1'b0 :
                   (status[2:1] == 2'd2) ? 1'b1 : (fit_169 || (auto_wide && !raster_fitted));
-assign VIDEO_ARX = ar_exact ? {1'b0, ar_x} : ar_wide ? 13'd16 : 13'd4;   // bit 12 clear: a ratio
-assign VIDEO_ARY = ar_exact ? {1'b0, ar_y} : ar_wide ? 13'd9  : 13'd3;
+assign VIDEO_ARX = ar_exact ? {1'b0, ar_x} : fit_fill ? {1'b0, hdmi_w_q} : ar_wide ? 13'd16 : 13'd4;   // bit 12 clear: a ratio
+assign VIDEO_ARY = ar_exact ? {1'b0, ar_y} : fit_fill ? {1'b0, hdmi_h_q} : ar_wide ? 13'd9  : 13'd3;
 
 // =========================================================================
 // The status block (docs/architecture.md "The HPS interface, v0.1": the control block's
