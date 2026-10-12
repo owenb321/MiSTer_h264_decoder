@@ -246,7 +246,7 @@ Analog Aspect mode. `--red` as always.
 **Lands with it:** Analog Aspect in CONF_STR (once; `settings.md`, `docs_check`), the
 manual's compatibility row, the roadmap's exact-aspect item.
 
-### 5a. Fit, the anamorphic 16:9 fit (issue #11, decided 2026-10-11 with the maintainer)
+### 5a. Fit, the anamorphic 16:9 fit (issue #11, decided 2026-10-11 with the maintainer; ✅ MERGED (PR #14), ✅ HW-CONFIRMED on HDMI 2026-10-12)
 
 **Found** (issue #11, on the rig with a 720x304 2.37:1 clip): Fit stretched every picture to the
 whole 720 x 480 raster, and a TV in its 16:9 (wide) mode stretches that to 16:9 -- so every

@@ -985,7 +985,7 @@ the identity").
       1.0, frozen). The full `run_disp_sched.sh --red` ALL GREEN (43 mutations). The maintainer's round on .201
       (2026-10-11): "all tests look good". Merged (PR #10).
 
-## Analog Aspect Fit, the anamorphic 16:9 fit (issue #11, found 2026-10-11 on the rig) -- 🔧 built on `fix/fit-anamorphic`
+## Analog Aspect Fit, the anamorphic 16:9 fit (issue #11, found 2026-10-11 on the rig) -- ✅ MERGED (PR #14) · ✅ HW-CONFIRMED on HDMI (2026-10-12)
 
 `docs/analog.md` §5a. Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at
 1.78:1. Decided 2026-10-11 with the maintainer: Fit = Letterbox for a 16:9 display (a wider picture
@@ -1001,6 +1001,7 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
 - [x] The maintainer's look on HDMI (an LG B7 in 16:9, 2026-10-12): the SD HDMI modes now filled under Fit (`fit_fill`,
       `history.md` §48); the 4:3 / scope / 16:9 clips correct, the remaining crop the TV's overscan. Fit SEED 1 PASS
       102.99 / 101.87 (`H264_fit169_20261012_0103.rbf`).
+- [x] Merged (PR #14, 2026-10-12).
 - [ ] Not yet: an analog TV in its wide mode.
 
 ## Phase 7 — For integrators
@@ -1049,7 +1050,8 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
       audio cost, a session with no video). **The interface is not frozen by it** (the
       maintainer: 1.0 waits for a public release): its findings (`jellyfin.md` §7 -- the overlay
       only during a session, the colour matrix, the refusal's name, the STC as the clock) are
-      designed and versioned as usual. The UI of D6 is its v2.
+      designed and versioned as usual. The UI of D6 was to be its v2 -- **dropped (the maintainer, 2026-10-12)**: the
+      client stays a cast target.
 - [x] ✅ **CAVLC through the HPS (fj#20) -- MERGED (PR fj#25, 2026-10-02, interface 0.10; `docs/cavlc.md`)**: a lossless CAVLC ->
       CABAC rewrite in the client library (`hps/include/h264ring_cavlc.h`), no RTL change;
       `h264play` uses it on every access unit. `run_cavlc.sh` GREEN and `--red` (30 mutations):
@@ -1110,16 +1112,8 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
       over 4 x 4 but not per line: a line texture at `v % 4 = 1` / `3`. Now every line and column exact (DVD's
       matrix); `run_dac_dither.sh --red` GREEN (`[lines]` / `[cols]`, T1-T9). Fit SEED 5 103.61 / 102.79 PASS, 37,938 ALM. On .236's CRT at 480i against main's
       build: main's crosshatching gone, gradients better, blue no worse (the maintainer; `history.md` §38).
-- [ ] **A CRT test-pattern / calibration app** (proposed 2026-10-06, the maintainer: "add demo apps 1 and 3
-      to the roadmap"). A program that renders patterns on the ARM straight into the picture stores
-      (interface 0.15's PICTURE record: no codec, exact to the pixel) for setting up an analog display:
-      SMPTE / EBU bars, black-level bars (PLUGE), grey and colour ramps (banding: the 6-bit DAC check that
-      found `analog.md` §12), convergence / geometry grids, overscan and title-safe frames, 75 % / 100 %
-      white windows, and moving interlace tests -- the field-order bar (§35's), a line-twitter check, motion
-      for Bob / Weave -- at 480i / 576i (field pairs, both orders) and 480p / 576p. Pad-driven, on the overlay
-      for its menu, a Scripts-menu launcher like the player's. Small: `clients/common/`'s core, ui and the
-      library's picture calls; no FFmpeg. Its host test scores each pattern's stores against a reference
-      rendering. Not started.
+- **Dropped (the maintainer, 2026-10-12): a CRT test-pattern / calibration app** (proposed 2026-10-06 with the
+      USB viewer below; never started).
 - [x] **A USB capture / webcam viewer -- ✅ MERGED (PR fj#37), ✅ HW-CONFIRMED 2026-10-06 (.201, and .236's CRT)** (proposed 2026-10-06 with the app above;
       `docs/uvc.md`: step 1's tool `h264cam` built -- libusb + our own UVC layer, the stage-by-stage
       measurement --; **measured on .201 with a C270 (2026-10-06): MJPEG 640x480 at 30 fits, CPU0 taken

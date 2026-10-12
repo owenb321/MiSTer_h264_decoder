@@ -146,7 +146,7 @@ Mbit/s **1.43x** (`docs/history.md` §19); fj#18 / fj#19 closed. **D1 is met wit
 clk_dec 96.43 -> **103.85 MHz** (VCO 1,350 / 13, gate 108.8; four retime rounds + a sweep, SEED 9
 111.77 / 110.41), on the rig 854x480p60 at 8 Mbit/s ~6 % to spare (was ~1 %; `docs/throughput.md`
 §7, `docs/history.md` §16). **The Jellyfin client ✅ MERGED (PR fj#24), ✅ HW-CONFIRMED 2026-10-01 with the maintainer (Phase 7,
-`docs/jellyfin.md`, `docs/history.md` §21):** J1-J6 decided 2026-10-01 (v1 a cast target; an LVGL browse UI is v2; the
+`docs/jellyfin.md`, `docs/history.md` §21):** J1-J6 decided 2026-10-01 (v1 a cast target; an LVGL browse UI was v2, dropped 2026-10-12; the
 interface NOT frozen by it -- 1.0 waits for a public release); R1-R3 measured (a QSV server's
 transcodes: High CABAC 852x480, I/P, 1.64-1.75x real time in the cosim; 5.1 audio ~7 % of an A9 core;
 an idle session raises nothing); `clients/jellyfin/` built and working on .201 against the
@@ -299,8 +299,8 @@ and column exact. No interface or OSD change. `run_dac_dither.sh --red` GREEN (`
 build on .201. On .236's CRT at 480i A/B'd against main's build (`history.md` §38): the crosshatching on main's
 build gone, gradients better, blue no worse (the maintainer).
 **Then:** nothing planned. Moonlight's automatic size stays 480p60 (decided 2026-10-04: frame rate over
-resolution; 720p30 by `moonlight.ini`). A Plex client was dropped (the maintainer, 2026-10-04: Jellyfin is enough). Candidates
-(`docs/roadmap.md`): the Jellyfin client's v2 browse UI, the interface frozen at 1.0 with the first public release (GitHub; **the first release is 1.0**, decided 2026-10-06 -- the open interface findings settled first, roadmap Phase 7). **F2, the colour matrix
+resolution; 720p30 by `moonlight.ini`). A Plex client was dropped (the maintainer, 2026-10-04: Jellyfin is enough). The Jellyfin client's
+v2 browse UI and a CRT test-pattern app were dropped (the maintainer, 2026-10-12). Candidates (`docs/roadmap.md`): the interface frozen at 1.0 with the first public release (GitHub; **the first release is 1.0**, decided 2026-10-06 -- the open interface findings settled first, roadmap Phase 7). **F2, the colour matrix
 (interface 0.16) ✅ MERGED (PR fj#41), ✅ HW-CONFIRMED** (`docs/colour.md`, `docs/architecture.md` "The colour", `docs/history.md` §39):
 the VUI's matrix and range honoured (untagged: SD 601, HD 709 by size), BT.601 / 709 / 2020 x limited / full, a 3-bit
 `colour` override in record header word 1 [35:33], error 17, words 80 / 86, `h264ring_set_colour()`; the Jellyfin client
@@ -347,7 +347,7 @@ report (fatal on `--release`), `tools/mister.py hdmi` measures the real clock. F
 (`H264_hdmi480sweep_20261011_1951.rbf`); on .201 27.000 / 74.250 / 148.500 MHz. **✅ MERGED (PR #12)**, verified on .201
 (the clock measured). DVD / UMD have the same exposure (not hit: `harvest.md`). Released 1.0.0 (SEED 12) is not affected.
 **Analog Aspect Fit, the anamorphic 16:9 fit (issue #11, `fix/fit-anamorphic`, 2026-10-11; `docs/analog.md` §5a,
-`history.md` §48)** 🔧: Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at 1.78:1 (a
+`history.md` §48) ✅ MERGED (PR #14), ✅ HW-CONFIRMED 2026-10-12 on HDMI (the maintainer, an LG B7)**: Fit filled the 720x480 raster, so a TV in its 16:9 wide mode showed every picture at 1.78:1 (a
 2.37:1 film 25 % too tall). Now Letterbox for a 16:9 display -- wider letterboxed (`oh = round(rh 16B / 9A)` through A''s
 normalised quotient, `lb` 0), narrower pillarboxed (`ow = round(405 A / B)`; 4:3 pillarboxed and HDMI Auto 16:9 under Fit:
 the maintainer's choices), the native snap as Letterbox's (mine, recorded). Fill (mode 3) unchanged; the benches' "raster
