@@ -1002,7 +1002,8 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
       `history.md` §48); the 4:3 / scope / 16:9 clips correct, the remaining crop the TV's overscan. Fit SEED 1 PASS
       102.99 / 101.87 (`H264_fit169_20261012_0103.rbf`).
 - [x] Merged (PR #14, 2026-10-12).
-- [ ] Not yet: an analog TV in its wide mode.
+- [x] On a CRT at 480i (.236, the maintainer, 2026-10-12): looks good, with the 0.15-era set replaced by main's core
+      and clients (`history.md` §48).
 
 ## Phase 7 — For integrators
 
