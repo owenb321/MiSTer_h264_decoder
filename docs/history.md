@@ -1708,3 +1708,7 @@ the frame filled (`H264_fit169_20261012_0103.rbf`, SEED 1 first roll PASS 102.99
 full 720 x 480, `ar` 720 : 480. The maintainer: 640x480 pillarboxed with bars at the sides only, the 720x304 film
 "letterboxed properly", 848x480 fills the screen; the remaining crop is the TV's overscan (the signal carries all 480
 lines).
+
+**On a CRT at 480i** (.236, 2026-10-12): main's build (`H264_fit169_20261012_0103.rbf` as `_Other/H264_20261012.rbf`) and
+main's clients (the player, the camera viewer, Jellyfin, Moonlight: library 1.1; the 0.15-era set kept as
+`*.iface0_15`), with the three Fit clips in `video/fit-test/`. The maintainer: "looks good".
