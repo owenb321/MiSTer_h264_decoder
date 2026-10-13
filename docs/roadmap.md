@@ -1012,7 +1012,7 @@ Figure E-1 puts it at `(voff + p) / 2`. Field-coded content only (interlaced H.2
 - [x] `disp_reader` `c_vf`, the golden's rule and `check_field_oracle` (ffmpeg `interl=1`, six sitings); `run_disp_reader.sh
       --red` ALL GREEN (N12-N14).
 - [x] On .201 against the golden, main's build as the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %).
-- [ ] A passing seed (first roll SEED 1 MARGINAL 99.58 / 97.82; a sweep).
+- [x] A passing seed: SEED 5 105.24 / 102.18 (SEEDs 1-4 missed), HDMI gate PASS; the same result on .201.
 
 ## Phase 7 — For integrators
 

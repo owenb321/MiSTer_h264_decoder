@@ -1733,3 +1733,7 @@ row) played by the file player (0.15's field pairs, `pic_mode` 1), 480p, Deinter
 | main (control) | 1.26 % exact, max 45 | **98.58 % exact, 99.99 % within 2, max 3** |
 
 The same ~1.4 % residual (at most 3 codes) on both builds: the decode / conversion, not the siting.
+
+**The swept build** (SEED 5 PASS 105.24 / 102.18, `H264_chromafieldsweep_20261013_0155.rbf`; SEEDs 2-4 missed) on .201 through
+the same script: 98.61 % exact, 99.99 % within 2, max 3 (main's rule 1.25 %); HDMI 27.000 MHz. (.201 was running a DVD
+harness Main left from that session's round -- Main's binary-switch trap; the raster does not depend on it.)

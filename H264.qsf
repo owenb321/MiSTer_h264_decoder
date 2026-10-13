@@ -403,6 +403,10 @@
 #   2026-10-13 fix/chroma-field (a field store's chroma at Figure E-1's field siting; f0c378b): SEED 1 first roll
 #     MARGINAL, clk_dec 99.58 / 97.82 (gate 101.4), clk_vid 90.37 / 87.24 PASS, HDMI gate PASS (X0_Y5_N1);
 #     H264_chromafield_MARGINAL_20261013_0049.rbf. Sweep follows.
+#   2026-10-13 fix/chroma-field sweep (2 3 4 5 ...): 2 96.47/96.4, 3 99.96/99.6, 4 96.18/98.63, **SEED 5 105.24/102.18 PASS**,
+#     clk_vid 92.95/89.47 PASS, HDMI gate PASS (X0_Y5_N1); ALM 39,135 (93 %), RAM 421, DSP 109,
+#     H264_chromafieldsweep_20261013_0155.rbf. SEED 5 pinned. (A retime of the decoder's paths is next: every branch
+#     since 93 % ALM has needed a sweep.)
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -505,4 +509,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 1
+set_global_assignment -name SEED 5

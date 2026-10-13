@@ -359,6 +359,15 @@ roll MARGINAL 100.45 / 98.98; **sweep SEED 1 PASS 101.91 / 102.68** (93 % ALM, H
 16:9 (VIC 3 / 18), so on those modes Fit fills the HDMI frame (`fit_fill`, W112 / W113); refit SEED 1 PASS 102.99 / 101.87
 (`H264_fit169_20261012_0103.rbf`); the maintainer: all three clips correct on HDMI; on .236's CRT at 480i, "looks good" (2026-10-12). No
 interface change.
+**A field store's chroma at Figure E-1's field siting (`fix/chroma-field`, 2026-10-12; found by MiSTer_UMD_Video;
+`docs/chroma.md` §2, `history.md` §49)** 🔧: a field's chroma offset was the frame's `voff` in the field's own lines
+(field-centred); Figure E-1 puts field p's at `(voff + p) / 2` (type 0: a quarter / three quarters). `disp_reader`'s `c_vf`,
+the golden's rule + UMD's `up_fv` + `check_field_oracle` (ffmpeg `interl=1`, six sitings, the old rule > 1 code off);
+`run_disp_reader.sh --red` ALL GREEN (N12-N14). Fit SEED 5 PASS 105.24 / 102.18 after a sweep
+(`H264_chromafieldsweep_20261013_0155.rbf`); on .201 an interlaced MPEG-2 still through the player against the golden, main's
+build the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %). No interface change. **Next: `perf/retime`**
+(the maintainer, 2026-10-13): every branch since 93 % ALM has needed a sweep -- the decoder's own paths (`recon_inter`'s
+5x5 product, `recon_hdr`, `recon_mb`: the 1.1 sweep's census), the P5b playbook, cosim bit-exact, ~105 first roll.
 ---
 
 ## Documentation discipline (read before starting work)
