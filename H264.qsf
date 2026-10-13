@@ -502,6 +502,8 @@ source sys/sys.tcl
 set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:sys/build_id.tcl"
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
+# (perf/retime) the fitter's own clk_dec target: after sys.qip, whose sys_top.sdc derives the PLL clocks
+set_global_assignment -name SDC_FILE h264/h264_fit.sdc
 source sys/sys_analog.tcl
 
 # ---- build settings ---------------------------------------------------------------------
