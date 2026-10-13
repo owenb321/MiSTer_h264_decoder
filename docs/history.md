@@ -1713,7 +1713,7 @@ lines).
 main's clients (the player, the camera viewer, Jellyfin, Moonlight: library 1.1; the 0.15-era set kept as
 `*.iface0_15`), with the three Fit clips in `video/fit-test/`. The maintainer: "looks good".
 
-## 49. A field store's chroma at Figure E-1's field siting (fix/chroma-field, 2026-10-12; from MiSTer_UMD_Video)
+## 49. A field store's chroma at Figure E-1's field siting (fix/chroma-field, 2026-10-12; from MiSTer_UMD_Video; ✅ MERGED (PR #17))
 
 `docs/chroma.md` §2, `harvest.md`. MiSTer_UMD_Video, building its own field chroma step, found this tree's field rule
 field-centred: field p's offset is `(voff + p) / 2` of its own line pair (type 0: a quarter / three quarters), not `voff`.

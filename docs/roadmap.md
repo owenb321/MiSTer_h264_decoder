@@ -1005,7 +1005,7 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
 - [x] On a CRT at 480i (.236, the maintainer, 2026-10-12): looks good, with the 0.15-era set replaced by main's core
       and clients (`history.md` §48).
 
-## A field store's chroma at Figure E-1's field siting (2026-10-12, found by MiSTer_UMD_Video) -- 🔧 built on `fix/chroma-field`
+## A field store's chroma at Figure E-1's field siting (2026-10-12, found by MiSTer_UMD_Video) -- ✅ MERGED (PR #17) · ✅ HW-CONFIRMED on .201 (2026-10-13)
 
 `docs/chroma.md` §2, `history.md` §49. A field's chroma offset was the frame's in the field's own lines (field-centred);
 Figure E-1 puts it at `(voff + p) / 2`. Field-coded content only (interlaced H.264, the player's interlaced MPEG-2).

@@ -360,7 +360,7 @@ roll MARGINAL 100.45 / 98.98; **sweep SEED 1 PASS 101.91 / 102.68** (93 % ALM, H
 (`H264_fit169_20261012_0103.rbf`); the maintainer: all three clips correct on HDMI; on .236's CRT at 480i, "looks good" (2026-10-12). No
 interface change.
 **A field store's chroma at Figure E-1's field siting (`fix/chroma-field`, 2026-10-12; found by MiSTer_UMD_Video;
-`docs/chroma.md` §2, `history.md` §49)** 🔧: a field's chroma offset was the frame's `voff` in the field's own lines
+`docs/chroma.md` §2, `history.md` §49) ✅ MERGED (PR #17), ✅ HW-CONFIRMED on .201 (2026-10-13)**: a field's chroma offset was the frame's `voff` in the field's own lines
 (field-centred); Figure E-1 puts field p's at `(voff + p) / 2` (type 0: a quarter / three quarters). `disp_reader`'s `c_vf`,
 the golden's rule + UMD's `up_fv` + `check_field_oracle` (ffmpeg `interl=1`, six sitings, the old rule > 1 code off);
 `run_disp_reader.sh --red` ALL GREEN (N12-N14). Fit SEED 5 PASS 105.24 / 102.18 after a sweep
