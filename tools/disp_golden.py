@@ -122,13 +122,18 @@ def up_field(c):
 #   a frame (or a field store at dv > 1, woven): cx = (X - ((dh - 1) << 16) - HOFF) >> (log2 dh + 1),
 #   cy = (Y - ((dv - 1) << 16) - VOFF) >> (log2 dv + 1) -- decimated chroma samples / rows;
 #   a store of fields at dv = 1: the field p of the row nearest Y (Bob's rebuilt line: the kept field),
-#   its own coordinates Yf = (Y - (p << 16)) >> 1, cy = (Yf - VOFF_p) >> 1, the store's rows 2 k + p;
+#   its own coordinates Yf = (Y - (p << 16)) >> 1, cy = (Yf - (VOFF_p + (p << 16)) / 2) >> 1, the store's
+#   rows 2 k + p -- Figure E-1's field siting: field p's chroma row m sits at frame line 4m + 2p + VOFF_p,
+#   i.e. (VOFF_p + p) / 2 down its own field's line pair (type 0: a quarter in the top field, three
+#   quarters in the bottom; MPEG-2's interlaced 4:2:0), not VOFF_p (the field-centred rule before
+#   2026-10-12, found by MiSTer_UMD_Video: docs/chroma.md §2);
 #   taps k = floor, k + 1, the weight the next 8 bits; below the crop both the first and weight 0,
 #   above it the last; h = (a (256 - w) + b w + 128) >> 8 on both rows, then the same vertically.
 # The siting (chroma_sample_loc_type, E.2.1): horizontally 1 / 3 / 5 centred (+1/2 luma sample), 0 / 2 / 4
 # co-sited; vertically 0 / 1 between the rows (+1/2), 2 / 3 the top row (0), 4 / 5 the bottom (+1).
 HOFF = {0: 0, 1: 1 << 15, 2: 0, 3: 1 << 15, 4: 0, 5: 1 << 15}
 VOFF = {0: 1 << 15, 1: 1 << 15, 2: 0, 3: 0, 4: 1 << 16, 5: 1 << 16}
+_FIELD_CENTRED = False        # (check_field_oracle only) the old field rule, to prove the oracle tells them apart
 
 
 def clerp(a, b, w):
@@ -155,7 +160,8 @@ def chroma_line(Ud, Vd, f, L, xs, sit=(0, 0), field=False, bobkeep=None, want_po
         if bobkeep is not None:
             p = bobkeep
         typ = t if p == 0 else b
-        cq = (((Yq - (p << 16)) >> 1) - VOFF[typ]) >> 1
+        foff = VOFF[typ] if _FIELD_CENTRED else (VOFF[typ] + (p << 16)) >> 1   # (Figure E-1's field siting)
+        cq = (((Yq - (p << 16)) >> 1) - foff) >> 1
         k0, k1, wy = ctaps(cq, f['ty'] >> 2, ((f['ty'] + f['hc']) >> 2) - 1)
         r0, r1 = 2 * int(k0) + p, 2 * int(k1) + p
     else:
@@ -210,11 +216,17 @@ def check_positions():
     assert vy(10, 0) == (4, 5, 192) and vy(11, 0) == (5, 6, 64), "voff 1/2 vertically"
     assert vy(10, 2) == (5, 6, 0) and vy(11, 2) == (5, 6, 128), "voff 0 (types 2, 3)"
     assert vy(10, 4) == (4, 5, 128) and vy(11, 4) == (5, 6, 0), "voff 1 (types 4, 5)"
-    # a field store (dv 1), type 0: frame line 10 is field 0's row 5 -> field chroma 2.25 -> rows 2 / 3 of
-    # field 0 = store rows 4 / 6, w 64; line 11 is field 1's row 5 -> store rows 5 / 7
-    assert vy(10, 0, True) == (4, 6, 64) and vy(11, 0, True) == (5, 7, 64), "a field's own rows"
-    # Bob keeping field 0: line 11 rebuilt from field 0 at its row 5.5 -> field chroma 2.5 -> store 4 / 6, w 128
-    assert vy(11, 0, True, 0) == (4, 6, 128), "Bob's rebuilt line from the kept field"
+    # a field store (dv 1), Figure E-1's field siting: field p's chroma row m at its own field line 2m + (VOFF + p) / 2.
+    # Type 0: frame line 10 is field 0's line 5 -> (5 - 1/4) / 2 = 2.375 -> its rows 2 / 3 = store rows 4 / 6, w 96;
+    # line 11 is field 1's line 5 -> (5 - 3/4) / 2 = 2.125 -> store rows 5 / 7, w 32 (the field-centred rule
+    # gave 64 / 64 before 2026-10-12)
+    assert vy(10, 0, True) == (4, 6, 96) and vy(11, 0, True) == (5, 7, 32), "a field's own rows, type 0"
+    # type 2 (top: 0, bottom: 1/2): (5 - 0) / 2 = 2.5 -> w 128; (5 - 1/2) / 2 = 2.25 -> w 64
+    assert vy(10, 2, True) == (4, 6, 128) and vy(11, 2, True) == (5, 7, 64), "a field's own rows, type 2"
+    # type 4 (top: 1/2, bottom: 1): (5 - 1/2) / 2 = 2.25 -> w 64; (5 - 1) / 2 = 2 -> w 0
+    assert vy(10, 4, True) == (4, 6, 64) and vy(11, 4, True) == (5, 7, 0), "a field's own rows, type 4"
+    # Bob keeping field 0: line 11 rebuilt from field 0 at its line 5.5 -> (5.5 - 1/4) / 2 = 2.625 -> store 4 / 6, w 160
+    assert vy(11, 0, True, 0) == (4, 6, 160), "Bob's rebuilt line from the kept field"
     # dh 2, type 0: decimated chroma sample m centred at luma x = 4m + 1
     f2 = dict(f, dh=2, sx=2 << 16)
     r = chroma_line(C, C, f2, 9, np.array([2]), (0, 0), want_pos=True)[2]   # output 2: X = 4.5 + ... -> centre
@@ -339,12 +351,30 @@ for _t in range(1, 6):                            # (chroma.md) the frame at eve
     write_want("disp_want_frame_s%d.hex" % _t, rgb(L[0], _u, _v))
 # a store of fields at the identity: each field's chroma within the field (store rows 2 k + p)
 Uw_, Vw_ = chroma_planes(L[1], L[2], F_ID, field=True)
-# ... independently: ffmpeg's separatefields split, each field upsampled as its own picture, woven back
+# ... independently: ffmpeg's separatefields split, each field upsampled at Figure E-1's FIELD siting (up_fv:
+# MiSTer_UMD_Video's, written from the weights, not from chroma_line's positions), woven back
+
+
+def up_fv(c, p):
+    """one field's chroma (field p: 0 top, 1 bottom; type 0) at H.264's field siting: horizontal as hup, then
+    field line k takes row m = k >> 1 and its far-side neighbour (k even: m - 1, odd: m + 1; the field's first /
+    last row itself); the line nearer its row (k & 1 == p) (7 h[m] + h[n] + 4) >> 3, the other
+    (5 h[m] + 3 h[n] + 4) >> 3 -- row m a quarter (top) / three quarters (bottom) down its line pair"""
+    h = hup(c)
+    R = c.shape[0]
+    rows = []
+    for k in range(2 * R):
+        m = k >> 1
+        n = max(m - 1, 0) if (k & 1) == 0 else min(m + 1, R - 1)
+        rows.append(((7 * h[m] + h[n] + 4) >> 3) if (k & 1) == p else ((5 * h[m] + 3 * h[n] + 4) >> 3))
+    return np.stack(rows)
+
+
 _fl = fields(*L)
 _ou, _ov = np.zeros_like(Uw_), np.zeros_like(Vw_)
 for _p in (0, 1):
-    _ou[_p::2], _ov[_p::2] = up_ident(_fl[_p][1]), up_ident(_fl[_p][2])
-assert (_ou == Uw_).all() and (_ov == Vw_).all(), "a field store's chroma is not each field's own upsampling"
+    _ou[_p::2], _ov[_p::2] = up_fv(_fl[_p][1], _p), up_fv(_fl[_p][2], _p)
+assert (_ou == Uw_).all() and (_ov == Vw_).all(), "a field store's chroma is not each field's own upsampling at E-1's siting"
 Lf = [L[0].astype(np.int64), Uw_, Vw_]
 write_want("disp_want_field.hex", rgb(*Lf))
 # ... the two fields at different sitings (top type 0, bottom type 2: {bottom, top} = 16): each line its own field's
@@ -389,6 +419,54 @@ def check_chroma_oracle(c):
 
 
 check_chroma_oracle(L[1])
+
+
+def check_field_oracle(c):
+    """(docs/chroma.md §2) the independent check of the FIELD rule: ffmpeg's interlaced 4:2:0 -> 4:4:4
+    (scale=interl=1 with in_chroma_loc: libswscale 9.0.1's format.c halves the vertical position for a field
+    and moves the bottom field's by a luma row -- Figure E-1's field positions, MPEG-2's interlaced siting)
+    against the model's field store at the identity, within one code (ffmpeg rounds once, the reader twice),
+    at all six sitings. And the old field-centred rule must be MORE than a code from it at every siting: an
+    oracle that cannot tell the two apart checks nothing (MiSTer_UMD_Video's check, ported 2026-10-12)"""
+    global _FIELD_CENTRED
+    if not HAVE_FFMPEG:
+        print("disp_golden: field chroma NOT checked (no ffmpeg)")
+        return
+    names = ["left", "center", "topleft", "top", "bottomleft", "bottom"]
+    def up_ff(cp, loc):
+        h, w = cp.shape
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = os.path.join(d, "in.yuv"), os.path.join(d, "out.yuv")
+            with open(src, "wb") as fh:
+                fh.write(b"".join(q.astype(np.uint8).tobytes() for q in (np.full((2 * h, 2 * w), 128), cp, cp)))
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "%dx%d" % (2 * w, 2 * h),
+                            "-i", src, "-vf", "scale=interl=1:in_chroma_loc=%s:flags=bilinear+full_chroma_int+accurate_rnd" % loc,
+                            "-f", "rawvideo", "-pix_fmt", "yuv444p", dst], check=True)
+            raw = np.frombuffer(open(dst, "rb").read(), np.uint8).astype(np.int64)
+        n = 4 * h * w
+        assert raw.size == 3 * n, "ffmpeg's interlaced upsampling: %d bytes" % raw.size
+        return raw[n:2 * n].reshape(2 * h, 2 * w)
+    s_ = np.s_[4:-4, 2:-2]                          # (the borders: ffmpeg's own edge rule)
+    worst = 0
+    for t, loc in enumerate(names):
+        ref = up_ff(c, loc)
+        try:
+            for centred in (False, True):
+                _FIELD_CENTRED = centred
+                u, _ = chroma_planes(c, c, F_ID, (t, t), field=True)
+                d = int(np.abs(u - ref)[s_].max())
+                if centred:
+                    assert d > 1, "siting %d (%s): the field-centred rule is within one code of ffmpeg's interlaced upsampling: no oracle" % (t, loc)
+                else:
+                    assert d <= 1, "siting %d (%s): field chroma %d codes from ffmpeg's interlaced upsampling" % (t, loc, d)
+                    worst = max(worst, d)
+        finally:
+            _FIELD_CENTRED = False
+    print("disp_golden: field chroma within %d code of ffmpeg's interlaced upsampling (interl=1) at all six sitings; "
+          "the field-centred rule is not" % worst)
+
+
+check_field_oracle(L[1])
 # Blend and Bob keep their LUMA kernels (ffmpeg's interlace lowpass for Blend); chroma is the field model's
 # -- Blend the line's own field (docs/chroma.md §2, decided), Bob's rebuilt line the kept field's
 write_want("disp_want_blend.hex", rgb(blend(Lf)[0], Uw_, Vw_))

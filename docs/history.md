@@ -1712,3 +1712,28 @@ lines).
 **On a CRT at 480i** (.236, 2026-10-12): main's build (`H264_fit169_20261012_0103.rbf` as `_Other/H264_20261012.rbf`) and
 main's clients (the player, the camera viewer, Jellyfin, Moonlight: library 1.1; the 0.15-era set kept as
 `*.iface0_15`), with the three Fit clips in `video/fit-test/`. The maintainer: "looks good".
+
+## 49. A field store's chroma at Figure E-1's field siting (fix/chroma-field, 2026-10-12; from MiSTer_UMD_Video)
+
+`docs/chroma.md` §2, `harvest.md`. MiSTer_UMD_Video, building its own field chroma step, found this tree's field rule
+field-centred: field p's offset is `(voff + p) / 2` of its own line pair (type 0: a quarter / three quarters), not `voff`.
+Ported: `disp_reader`'s `c_vf`, the golden's field rule, UMD's `up_fv` cross-check, `check_field_oracle` (ffmpeg
+`scale=interl=1` within a code at all six sitings, the old rule > 1 off); `run_disp_reader.sh --red` ALL GREEN (72
+mutations, N12-N14 new). First fit SEED 1 MARGINAL 99.58 / 97.82 (`H264_chromafield_MARGINAL_20261013_0049.rbf`; the
+reported 97 % ALM is packing -- `disp_reader` alone synthesises +42 ALUTs, registers equal).
+
+**On .201**, the marginal build (above 96.43) and main's as the control arm, the same script: an interlaced MPEG-2 still
+(720x480, top field first, intra, square pixels so HDMI's scaler passes the raster 1:1; a new chroma value on every chroma
+row) played by the file player (0.15's field pairs, `pic_mode` 1), 480p, Deinterlace Weave; the raw raster against
+`disp_golden.py`'s field model of the host's decode under both rules:
+
+| build | Figure E-1 (this branch's rule) | field-centred (main's) |
+|---|---|---|
+| this branch | **98.61 % exact, 99.99 % within 2, max 3** | 1.25 % exact, max 45 |
+| main (control) | 1.26 % exact, max 45 | **98.58 % exact, 99.99 % within 2, max 3** |
+
+The same ~1.4 % residual (at most 3 codes) on both builds: the decode / conversion, not the siting.
+
+**The swept build** (SEED 5 PASS 105.24 / 102.18, `H264_chromafieldsweep_20261013_0155.rbf`; SEEDs 2-4 missed) on .201 through
+the same script: 98.61 % exact, 99.99 % within 2, max 3 (main's rule 1.25 %); HDMI 27.000 MHz. (.201 was running a DVD
+harness Main left from that session's round -- Main's binary-switch trap; the raster does not depend on it.)

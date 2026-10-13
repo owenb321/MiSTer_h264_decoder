@@ -128,6 +128,12 @@
 #   N9  disp: the second chroma tap not clamped (the right edge)     -> [rgb]
 #   N10 disp: a frame's chroma row position without (dv - 1)         -> [fit] tall
 #   N11 disp: a chroma row's source rows not x dv                    -> [fit] tall
+#   (2026-10-12, found by MiSTer_UMD_Video: a field store's chroma at Figure E-1's FIELD siting -- field p's
+#   offset (voff + p) / 2 of its own line pair; the golden's field rule checked against ffmpeg's interlaced
+#   upsampling, scale=interl=1, at all six sitings, and shown distinct from the old field-centred rule)
+#   N12 disp: the field-centred rule (a field's offset the frame's voff)  -> [field]
+#   N13 disp: the bottom field's extra half line dropped (voff / 2 both)  -> [field]
+#   N14 disp: a field's offset not halved (voff + p)                      -> [field]
 #   (the vertical weight zeroed below the crop is an EQUIVALENT mutant: there both taps are the first row)
 set -u
 cd "$(dirname "$0")/../.."
@@ -331,6 +337,12 @@ PYEOF
   mut N9 $D "(s0_ck + 29'sd1 > \$signed({17'd0, ckmax_x})) ? ckmax_x[9:0] : s0_ck[9:0] + 10'd1;" "s0_ck[9:0] + 10'd1;" $DT "rgb" "$O" & throttle
   mut N10 $D ": (ln_pos - \$signed({24'd0, (4'd1 << r_dv) - 4'd1, 16'd0}));" ": ln_pos;" $DT "fit" "$O" "$(fit_args tall)" & throttle
   mut N11 $D "wire  [14:0] c_src0 = {3'd0, f_crow} << m_dv;" "wire  [14:0] c_src0 = {3'd0, f_crow};" $DT "fit" "$O" "$(fit_args tall)" & throttle
+  wait
+  # (2026-10-12) a field store's chroma at Figure E-1's field siting
+  FA="+arm=field +field +want=$G/disp_want_field.hex"
+  mut N12 $D "((c_a >>> 1) - \$signed({27'd0, c_vf}))" "((c_a >>> 1) - \$signed({27'd0, c_voff}))" $DT "field" "$O" "$FA" & throttle
+  mut N13 $D "wire  [17:0] c_vfs = {1'b0, c_voff} + {1'b0, c_cp, 16'd0};" "wire  [17:0] c_vfs = {1'b0, c_voff};" $DT "field" "$O" "$FA" & throttle
+  mut N14 $D "wire  [16:0] c_vf  = c_vfs[17:1];" "wire  [16:0] c_vf  = c_vfs[16:0];" $DT "field" "$O" "$FA" & throttle
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"

@@ -56,7 +56,15 @@ chroma position, the position taken at the picture's **chroma siting**:
 - **A store of fields** (`pic_field`) at dv = 1: chroma is interpolated WITHIN ONE FIELD -- the field of
   the luma tap k0, i.e. the PARITY OF THE STORE ROW SHOWN (or for Bob's rebuilt line the KEPT field) --
   at the position of the line in that field's own coordinates (field line `(y - p) / 2`, then the
-  field's siting); the store's chroma row of field row j is `2 j + p` (line-interleaved). This is
+  field's siting); the store's chroma row of field row j is `2 j + p` (line-interleaved). **The field's
+  siting is Figure E-1's** (corrected 2026-10-12, found by MiSTer_UMD_Video): field p's chroma row m sits
+  at frame line `4m + 2p + voff` -- the progressive positions, MPEG-2's interlaced 4:2:0 -- so in the
+  field's own lines its offset is `(voff + p) / 2`, not `voff`: type 0 a quarter down the top field's
+  line pair and three quarters down the bottom's (until then both a half, field-centred: an eighth of the
+  chroma step off on every field line). Types 2 / 3: 0 and 1/2; 4 / 5: 1/2 and 1. At type 0 the line
+  nearer its row takes `(7 c[m] + c[n] + 4) >> 3`, the other `(5 c[m] + 3 c[n] + 4) >> 3`. Checked against
+  ffmpeg's interlaced upsampling (`scale=interl=1`, libswscale 9.0.1+) within a code at all six sitings,
+  the old rule more than a code off (the golden's `check_field_oracle`); `disp_reader`'s `c_vf`, N12-N14. This is
   today's rule (`c_row = 2 (k >> 2) + (k & 1)`: the row's own field) made continuous, and it does not
   depend on WHEN the row is shown: at 480i, whether the store's field p lands on raster field p is
   `disp_fhold`'s business (word 85, PR fj#35's field order); whichever raster field shows store row k,
