@@ -42,6 +42,7 @@
 #       (both must survive the plain run: there col_off is 0)
 #   M11 the row gate removed (P5b streaming: a read ahead of rows_avail) -> [pred] under +rows=1 only
 #                                                                     (must survive the plain run: the window is whole there)
+#   M16 (perf/retime) S8's FIFO write a stage early (the operands not yet registered) -> [pred|last]
 #   W1  wpred bi rounding 2^logWD -> 2^(logWD-1)                   -> [out] E/bi lw0 oz
 #   W2  wpred single-list logWD == 0: rounds by 1                  -> [out] E/single lw0
 #   W3  wpred offset rounding (o0 + o1 + 1) >> 1 -> (o0 + o1) >> 1 -> [out] E/bi lw0 (survives the "oz" class: the offsets are what sees it)
@@ -197,6 +198,8 @@ PYEOF
   mut M14 mc "fx_7 <= fx_s[t6_s]; fy_7 <= fy_s[t6_s];" "fx_7 <= fx_s[ps]; fy_7 <= fy_s[ps];" pred "$ANY" ovl &
   mut M15 mc "always_comb begin ready = !active && !set_used[!ps]; rd_done = !active; end" "always_comb begin ready = !active; rd_done = !active; end" pred "$ANY" ovl &
   mut M13 mc "row_base <= {3'd0, win_stride, 1'b0} + {4'd0, col_off};\n                end else if (!in_ynz)" "row_base <= {3'd0, win_stride, 1'b0};\n                end else if (!in_ynz)" pred "L[0-9x]* fx0fy0" off &
+  # (perf/retime) S8: the FIFO written a stage early (the previous sample's registered operands)
+  mut M16 mc "assign fpush = t8_ov;" "assign fpush = t7_ov;" "pred|last" "$ANY" 0 &
   wait
   mut W1  wp "wire  signed [19:0] rnd_b = 20'sd1 <<< lw;" "wire  signed [19:0] rnd_b = (20'sd1 <<< lw) >>> 1;" out "E/bi lw0 oz" 0 &
   mut W2  wp "wire  signed [19:0] rnd_s = (lw == 3'd0) ? 20'sd0 : (20'sd1 <<< (lw - 3'd1));" "wire  signed [19:0] rnd_s = (lw == 3'd0) ? 20'sd1 : (20'sd1 <<< (lw - 3'd1));" out "E/single lw0" 0 &

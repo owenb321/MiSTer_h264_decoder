@@ -141,6 +141,19 @@ module recon_top
 
     // ---- recon_hdr ------------------------------------------------------------------------------
     logic        h_valid, hdr_end;
+    // (perf/retime, 2026-10-13) the header words reach recon_hdr a register later: the FIFO's output ->
+    // the router -> recon_hdr's field decode was a census cluster on every seed. hdr_end is delayed the
+    // same cycle (the last header word -> hdr_end gap unchanged); a word registered as `clear` arrives is
+    // dropped (before: processed, then cleared -- the same parameter sets either way)
+    logic        hq_valid, hq_end;
+    logic [7:0]  hq_kind, hq_aux;
+    logic [31:0] hq_val;
+    always_ff @(posedge clk or negedge rst_n)
+        if (!rst_n) begin hq_valid <= 1'b0; hq_end <= 1'b0; hq_kind <= '0; hq_aux <= '0; hq_val <= '0; end
+        else begin
+            hq_valid <= h_valid && !clear; hq_end <= hdr_end && !clear;
+            hq_kind <= w_kind; hq_aux <= w_aux; hq_val <= w_val;
+        end
     wire         slice_ready;
     wire [SPS_W-1:0] sps_w;
     wire [25:0] sps_col;                   // (0.16) the slice's SPS's colour description (recon_hdr)
@@ -177,7 +190,7 @@ module recon_top
     wire [31:0] sl4_q, sl8_q;
     recon_hdr u_hdr (
         .clk(clk), .rst_n(rst_n), .clear(clear),
-        .se_valid(h_valid), .se_kind(w_kind), .se_aux(w_aux), .se_val(w_val), .hdr_end(hdr_end),
+        .se_valid(hq_valid && !clear), .se_kind(hq_kind), .se_aux(hq_aux), .se_val(hq_val), .hdr_end(hq_end),
         .slice_ready(slice_ready), .sps(sps_w), .sps_colour(sps_col), .sps_siting(sps_sit), .pps(pps_w), .sh_first_mb(sh_first_mb), .sh_slice_type(sh_slice_type),
         .sh_nal_ref_idc(sh_nal_ref_idc), .sh_idr(sh_idr), .sh_frame_num(sh_frame_num), .sh_field_pic(sh_field_pic),
         .sh_bottom_field(sh_bottom_field), .sh_poc_lsb(sh_poc_lsb), .sh_delta_poc_bottom(sh_delta_poc_bottom),
@@ -196,12 +209,16 @@ module recon_top
 
     // ---- recon_dpb / recon_lists ---------------------------------------------------------------------
     // the picture bound, decided BEFORE recon_dpb opens a picture: recon_hdr registers the
-    // active SPS on the edge that pulses slice_ready, so the product is valid a cycle later and
-    // recon_dpb takes the slice then (sr_d1), or never (a refused slice: R_SLICE_WAIT discards it)
-    logic        sr_d1;
+    // active SPS on the edge that pulses slice_ready (held until the next slice); the size is
+    // registered in three steps -- the sides (sz_w / sz_h), their product, the compare -- so
+    // recon_dpb takes the slice three cycles after slice_ready (sr_d3), or never (a refused slice:
+    // R_SLICE_WAIT discards it). (perf/retime, 2026-10-13: the product and the compare in one
+    // cycle with the hand-off were clk_dec's largest census cluster; two cycles a slice are free)
+    logic        sr_d1, sr_d2, sr_d3;
+    logic [7:0]  sz_w, sz_h;
     logic [20:0] sz_prod;
-    wire         sz_over = (sz_prod > 21'd3600);   // Level 3.1's MaxFS (Table A-1)
-    wire         dpb_slice_ready = sr_d1 && !sz_over;
+    logic        sz_over;                       // Level 3.1's MaxFS (Table A-1): sz_prod > 3,600
+    wire         dpb_slice_ready = sr_d3 && !sz_over;
     wire        pipe_idle;
     wire        d_pic_start, d_pic_new, lists_go, lists_done, slice_go, dpb_busy;
     wire [4:0]  d_store;
@@ -443,7 +460,7 @@ module recon_top
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rs <= R_RUN; in_slice_hdr <= 1'b0; hdr_end <= 1'b0; tab_go <= 1'b0; mb_slice_go <= 1'b0;
-            refuse_pic <= 1'b0; plane_mbs <= '0; sr_d1 <= 1'b0; sz_prod <= '0; pic_count <= '0; err_count <= '0; err_code <= '0; ref_size <= '0;
+            refuse_pic <= 1'b0; plane_mbs <= '0; sr_d1 <= 1'b0; sr_d2 <= 1'b0; sr_d3 <= 1'b0; sz_w <= '0; sz_h <= '0; sz_over <= 1'b0; sz_prod <= '0; pic_count <= '0; err_count <= '0; err_code <= '0; ref_size <= '0;
             pic_start <= 1'b0; cur_store <= '0; cur_struct <= '0; pic_done <= 1'b0; done_store <= '0; done_struct <= '0;
             width_mbs <= '0; frame_height_mbs <= '0; aspect_idc <= '0; sar_w <= '0; sar_h <= '0; had_pic <= 1'b0; idle <= 1'b1; m_err_q <= '0; idle_run <= '0;
             dpb_eos <= 1'b0; pinfo_we <= 1'b0; pinfo_store <= '0; pinfo_second <= 1'b0; pinfo_w_mbs <= '0; pinfo_hf_mbs <= '0; pinfo_aspect <= '0;
@@ -453,8 +470,10 @@ module recon_top
         end else begin
             // P5d: an end-of-stream word consumed -> recon_dpb closes and flushes
             dpb_eos <= sf_rd && sf_valid && (w_kind == K_EOS_WORD);
-            sr_d1 <= slice_ready;
-            sz_prod <= {13'd0, w_mbs} * {13'd0, hf_mbs};
+            sr_d1 <= slice_ready; sr_d2 <= sr_d1; sr_d3 <= sr_d2;
+            sz_w <= w_mbs; sz_h <= hf_mbs;
+            sz_prod <= {13'd0, sz_w} * {13'd0, sz_h};
+            sz_over <= (sz_prod > 21'd3600);
             pinfo_we <= 1'b0;
             m_err_q <= m_err;
             idle_run <= !pipe_idle ? 2'd0 : (idle_run == 2'd3) ? 2'd3 : idle_run + 2'd1;
@@ -506,7 +525,7 @@ module recon_top
                     in_slice_hdr <= (w_aux[4:0] == 5'd1 || w_aux[4:0] == 5'd5);
                     rs <= R_RUN;
                 end
-                R_SLICE_WAIT: if (sr_d1 && sz_over) begin
+                R_SLICE_WAIT: if (sr_d3 && sz_over) begin
                     // above Level 3.1's MaxFS: never handed to recon_dpb (no store, no output)
                     ref_size <= ref_size + 1'b1;
                     rs <= R_DISCARD;

@@ -47,6 +47,7 @@
 #   M19 Fld_To_Frm: mvCol[1] not doubled (8-194)                     -> BDIR16T / B8x8DT (camp_mot_picaff0, refs)
 #   M20 the block -> entry map not kept (each block reads its own)    -> P16x16      (x264 P)
 #   M22 the partition's list use registered for S_APPLY stuck at list 0 (P6 timing) -> a B class
+#   M23 (perf/retime) the entry mux's select: a C inside the macroblock never replaced by D -> a P 8x8 / 8x16 / 16x8 class
 #   M21 spatial direct's reference not taken as S_SP_REF writes it (ref_in_q from ref_in
 #       there too: S_SP_REF is the cycle before S_MVP_Q0 reads it) -> BDIR16S (x264 B spatial;
 #       from MiSTer_UMD_Video's arm for the same registered ref_in_q, 2026-09-28)
@@ -211,6 +212,8 @@ PYEOF
   mut M20 "if (wr_mask[b]) pfb[b] <= wr_ent;" "if (wr_mask[b]) pfb[b] <= b[3:0];" p 0 "$(cls P16x16)" &
   mut M22 "cpred_q <= cpred; part_mask_q <= part_mask;" "cpred_q <= 2'b01; part_mask_q <= part_mask;" bs 0 "$(cls 'B16x16|B16x8|B8x16|B8x8')" &
   mut M21 "ref_in_q[l] <= (mp_abc[0][5] && mp_abc[1][5]) ? 6'sd0 : {1'b0, mp_abc[l][4:0]};" "ref_in_q[l] <= ref_in[l];" bs 0 "$(cls BDIR16S)" &
+  # (perf/retime) the entry mux's select without dec_done: C inside the macroblock never replaced by D there
+  mut M23 "wire  [4:0]  selC_nb = (lkk[2] == 2'd2) ? lksel[3] : selC;" "wire  [4:0]  selC_nb = (lkk[2] == 2'd2) ? lksel[2] : selC;" p 0 "$(cls 'P8x8|P8x16|P16x8')" &
   if [ $CONF = 1 ]; then
     mut M10r "2'd1:    td_mvy_s = (ce_mvy_s + ce_mvy_neg) >>> 1;" "2'd1:    td_mvy_s = ce_mvy_s >>> 1;" picaff 0 "$(cls 'BDIR16T|B8x8DT')" &
     mut M15 "wire  [4:0]  td_ref0 = (ta_intra || !mc_ok) ? 5'd0 : map_q[4:0];" "wire  [4:0]  td_ref0 = (ta_intra || !mc_ok) ? 5'd0 : 5'd0;" picaff 0 "$(cls 'BDIR16T|B8x8DT')" &

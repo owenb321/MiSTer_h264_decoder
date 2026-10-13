@@ -802,14 +802,14 @@
                 end
                 // ---- QP, the residual engine's request, the branch ----------------------------
                 A_QP: if (mb_pcm || !rq_v) begin
-                    a_qp <= qp_new; qp_pred <= qp_new;
-                    a_qpc0 <= qpc_n0; a_qpc1 <= qpc_n1;
+                    a_qp <= qp_new_q; qp_pred <= qp_new_q;
+                    a_qpc0 <= qpc_n0_q; a_qpc1 <= qpc_n1_q;
                     a_pcm_qpc0 <= qpc_p0; a_pcm_qpc1 <= qpc_p1;
                     a_intra <= mb_is_intra && !mb_skip; a_pcm <= mb_pcm;
                     a_i4 <= mb_is_intra && !mb_skip && mb_itype == 5'd0;
                     a_t8 <= mb_t8;                    // (mb_intake: 0 unless coded, I_NxN or inter)
                     if (!mb_pcm) begin                // the residual engine walks this macroblock
-                        rq_v <= 1'b1; rq_qp <= qp_new; rq_qpc0 <= qpc_n0; rq_qpc1 <= qpc_n1;
+                        rq_v <= 1'b1; rq_qp <= qp_new_q; rq_qpc0 <= qpc_n0_q; rq_qpc1 <= qpc_n1_q;
                         rq_intra <= mb_is_intra && !mb_skip; rq_i4 <= mb_is_intra && !mb_skip && mb_itype == 5'd0;
                         rq_t8 <= mb_t8; rq_coded <= mb_coded; rq_cbank <= mb_cbank; rq_rbank <= a_rbank;
                     end
@@ -1613,11 +1613,16 @@
                     end
                     coded = g_coded[slot];
                     is_dc = (kind == 3'd3 || kind == 3'd4);
+                    // an uncoded DC block clears its flags (perf/retime, 2026-10-13: written from r_blk and its
+                    // coded bit alone -- the skip branch below is taken for a DC block exactly when it is not
+                    // coded, so the dc_nz lookup that decides it for AC blocks left these clears' cone; r_blk ->
+                    // dc_ra -> dc_nz[dc_ra] -> the branch -> dc_nz was a census cluster). Slots: 0 luma, 17 / 18
+                    if (r_blk == 5'd0  && !g_coded[0])  dc_nz[15:0]  <= '0;
+                    if (r_blk == 5'd17 && !g_coded[17]) dc_nz[19:16] <= '0;
+                    if (r_blk == 5'd22 && !g_coded[18]) dc_nz[23:20] <= '0;
                     if (r_blk == 5'd27) rs <= R_IDLE;
                     else if (!coded && (is_dc || !dcnz)) begin
                         // no levels and no DC: nothing to transform
-                        if (kind == 3'd3) dc_nz[15:0] <= '0;
-                        if (kind == 3'd4) begin if (c) dc_nz[23:20] <= '0; else dc_nz[19:16] <= '0; end
                         if (kind == 3'd5) begin
                             for (int k = 0; k < 4; k++) begin res_rdy[{g_rbank, id + k[4:0]}] <= 1'b1; res_zero[{g_rbank, id + k[4:0]}] <= 1'b1; end
                             r_blk <= r_blk + 5'd4;

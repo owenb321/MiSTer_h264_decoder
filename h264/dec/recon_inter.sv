@@ -163,6 +163,12 @@ module recon_inter (
     wire         sd_bi = d_bi[tgt];
     wire         sd_lx = d_lx[tgt];
     wire         sd_gp0 = d_gp0[tgt];
+    // (perf/retime, 2026-10-13) the target's fields latched as its setup leaves KS_IDLE, used by the later
+    // KS states and the POC reads: kb -> tgt -> d_*[tgt] -> the weights was a census cluster on every seed.
+    // Equivalent: the target is one bank for the whole sequence (k starts only once sdone is set; k's
+    // return to idle flips kb, so tgt still names the same bank) and a claimed bank's descriptor holds
+    logic [4:0]  ls_gref0, ls_gref1;
+    logic        ls_bi, ls_gp0, ls_c;
 
     // fetch bookkeeping
     logic [4:0]  req_row;                  // next row to request
@@ -261,8 +267,8 @@ module recon_inter (
     wire signed [15:0] gmvy = lx ? mot_qq[91:76] : mot_qq[45:30];
     wire [7:0]  gcode = lx ? mot_qq[59:52] : mot_qq[13:6];   // {valid, store[4:0], parity[1:0]}
 
-    assign poc_ra0 = sd_gref0;             // the item being set up (read from KS_WT_RD2 on,
-    assign poc_ra1 = sd_gref1;             // >= 2 cycles after its setup starts; its bank claimed)
+    assign poc_ra0 = ls_gref0;             // the item being set up (read from KS_WT_RD2 on,
+    assign poc_ra1 = ls_gref1;             // >= 2 cycles after its setup starts; its bank claimed)
 
     // ---- window geometry ------------------------------------------------------------------
     wire        is_c = (plane != 2'd0);
@@ -362,6 +368,13 @@ module recon_inter (
     wire         k_split  = (kd_bw >= 5'd8);
     wire  [4:0]  k_lw     = k_split ? {1'b0, kd_bw[4:1]} : kd_bw;     // a lane's width
     wire  [4:0]  k_stride = kd_c ? kd_bw + 5'd1 : kd_bw + 5'd5;       // the whole window's
+    // (perf/retime, 2026-10-13) each bank's lane sample count (lane width x height), registered from
+    // the bank's own descriptor -- the push took the product behind the kb select in one cycle. A
+    // descriptor is filled (d_*[fb]) long before its item starts, so the register's cycle never shows
+    logic [8:0]  bank_n [0:1];
+    always_ff @(posedge clk)
+        for (int b = 0; b < 2; b++)
+            bank_n[b] <= {4'd0, (d_bw[b] >= 5'd8) ? {1'b0, d_bw[b][4:1]} : d_bw[b]} * {4'd0, d_bh[b]};
     logic        mc_start;
     logic        mc_kind;                  // the item mc_start starts: 0 list 0 of a bi-predicted group
                                            // (into pbuf), 1 the last list (through wpred)
@@ -523,7 +536,7 @@ module recon_inter (
                     q_kind[tl] <= mc_kind; q_bi2[tl] <= kd_bi; q_pb[tl] <= pbb; q_c[tl] <= kd_c;
                     q_mode[tl] <= wp_mode; q_lwd[tl] <= wp_logwd; q_w0[tl] <= wp_w0; q_w1[tl] <= wp_w1;
                     q_o0[tl] <= wp_o0; q_o1[tl] <= wp_o1;
-                    q_n[tl] <= {4'd0, k_lw} * {4'd0, kd_bh};
+                    q_n[tl] <= bank_n[kb];
                     q_pl[tl] <= kd_plane;
                     q_gx2[tl] <= kd_c ? {1'b0, kd_gx[4:1]} : kd_gx; q_gy2[tl] <= kd_c ? {1'b0, kd_gy[4:1]} : kd_gy;
                     q_off[tl] <= (ln == 0) ? 5'd0 : k_lw; q_klw[tl] <= k_lw;
@@ -641,7 +654,7 @@ module recon_inter (
             st <= I_IDLE; busy <= 1'b0; done <= 1'b0; err <= 1'b0;
             g_blk <= '0; g_x <= '0; g_y <= '0; g_w <= '0; g_h <= '0; g_q <= '0; g_sub <= '0;
             plane <= '0; lx <= 1'b0; g_bi <= 1'b0;
-            k <= K_IDLE; ks <= KS_IDLE; sdone <= 1'b0; s_kind <= 1'b0; bank_full <= '0; fb <= 1'b0; kb <= 1'b0; c1_fb <= 1'b0;
+            k <= K_IDLE; ks <= KS_IDLE; sdone <= 1'b0; ls_gref0 <= '0; ls_gref1 <= '0; ls_bi <= 1'b0; ls_gp0 <= 1'b0; ls_c <= 1'b0; s_kind <= 1'b0; bank_full <= '0; fb <= 1'b0; kb <= 1'b0; c1_fb <= 1'b0;
             bank_rows[0] <= '0; bank_rows[1] <= '0; c1_clr <= 1'b0; w2_clr <= 1'b0; w2_fb <= 1'b0;
             for (int b = 0; b < 2; b++) begin
                 d_plane[b] <= '0; d_fx[b] <= '0; d_fy[b] <= '0; d_bw[b] <= '0; d_bh[b] <= '0; d_gx[b] <= '0; d_gy[b] <= '0;
@@ -865,19 +878,20 @@ module recon_inter (
             // ---- the setup machine: the next item's route and weights -------------------------
             case (ks)
                 KS_IDLE: if (!sdone && bank_full[tgt]) begin
+                    ls_gref0 <= sd_gref0; ls_gref1 <= sd_gref1; ls_bi <= sd_bi; ls_gp0 <= sd_gp0; ls_c <= sd_c;
                     if (sd_bi && !sd_lx) begin s_kind <= 1'b0; sdone <= 1'b1; end   // list 0 of a bi-predicted group: into pbuf
                     else ks <= KS_WT_RD;                                              // the last list: the weights, then wpred
                 end
                 KS_WT_RD: begin
                     // the explicit weight entries: list 0 first (the single list's otherwise)
-                    wt_addr <= {1'b0, sd_gref0};
+                    wt_addr <= {1'b0, ls_gref0};
                     ks <= KS_WT_RD1;
                 end
                 KS_WT_RD1: ks <= KS_WT_RD2;     // the table registers the address, then the data
                 KS_WT_RD2: begin
                     logic explicit, implicit;
                     explicit = (slice_type == 2'd0 && weighted_pred) || (slice_type == 2'd1 && weighted_bipred_idc == 2'd1);
-                    implicit = (slice_type == 2'd1 && weighted_bipred_idc == 2'd2 && sd_bi);
+                    implicit = (slice_type == 2'd1 && weighted_bipred_idc == 2'd2 && ls_bi);
                     if (implicit) begin
                         ds_b <= cur_poc - $signed(poc_q0);
                         ds_d <= $signed(poc_q1) - $signed(poc_q0);
@@ -889,15 +903,15 @@ module recon_inter (
                         if (explicit) begin
                             // wt_data: {cr_o, cr_w, cb_o, cb_w, luma_o, luma_w} of the entry addressed
                             // last cycle (list 0 when the group uses it, else list 1: re-read below)
-                            if (sd_gp0) begin
+                            if (ls_gp0) begin
                                 wp_w0 <= wt_w;
                                 wp_o0 <= wt_o;
-                                if (sd_bi) begin wt_addr <= {1'b1, sd_gref1}; ks <= KS_IMPL; end
+                                if (ls_bi) begin wt_addr <= {1'b1, ls_gref1}; ks <= KS_IMPL; end
                             end else begin
-                                wt_addr <= {1'b1, sd_gref1};
+                                wt_addr <= {1'b1, ls_gref1};
                                 ks <= KS_IMPL;              // read list 1's entry as the single list
                             end
-                            wp_logwd <= sd_c ? chroma_log2_wd : luma_log2_wd;
+                            wp_logwd <= ls_c ? chroma_log2_wd : luma_log2_wd;
                         end
                     end
                 end
@@ -907,7 +921,7 @@ module recon_inter (
                     logic explicit;
                     explicit = (slice_type == 2'd0 && weighted_pred) || (slice_type == 2'd1 && weighted_bipred_idc == 2'd1);
                     if (explicit) begin
-                        if (sd_gp0) begin
+                        if (ls_gp0) begin
                             wp_w1 <= wt_w;
                             wp_o1 <= wt_o;
                         end else begin
@@ -919,7 +933,7 @@ module recon_inter (
                         // 8.4.3: 32/32 when td is 0, either picture is long-term, or DSF >> 2
                         // is outside -64..128
                         wp_mode <= 2'd1; wp_logwd <= 3'd5; wp_o0 <= '0; wp_o1 <= '0;
-                        if (ds_zero || lng0[sd_gref0] || lng1[sd_gref1] ||
+                        if (ds_zero || lng0[ls_gref0] || lng1[ls_gref1] ||
                             (ds_dsf >>> 2) < -11'sd64 || (ds_dsf >>> 2) > 11'sd128) begin
                             wp_w0 <= 9'sd32; wp_w1 <= 9'sd32;
                         end else begin

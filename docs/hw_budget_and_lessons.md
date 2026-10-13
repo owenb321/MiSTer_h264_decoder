@@ -319,6 +319,13 @@ that had always met timing (recon_dpb's D_POC1_RD2) BELOW the constraint itself,
 spread thin over three modules -- placement, where a seed sweep (SEED 9, first try) beat another
 RTL round. Near 78 % ALM, stop retiming when the census stops being one cluster.
 
+**8b. The 93 % ALM retime (2026-10-13, `throughput.md` §8): the seed spread is placement's.** Three rounds each removed
+their census clusters, and each netlist still fitted ~93-104 MHz across four seeds -- the clusters move with the seed.
+Two lessons: **measure a round on several seeds**, never one (round 2 passed SEED 5 at 104 and failed three others);
+and **the fitter aims at the SDC, not at the gate** -- Auto Fit eases off at the real clock, so `h264/h264_fit.sdc`
+over-constrains clk_dec for `quartus_fit` only (+2-3 MHz on average; it must follow `sys.qip`, after the PLL clocks
+exist, or it is silently ignored -- check the fit report for "Ignored set_clock_uncertainty").
+
 **9. The build gate watches setup only.** `fmax_check.sh` reads clk_dec's setup Fmax; the timing
 report's *recovery* analysis had been negative into clk_dec on every build since at least
 pad-home (`dec_stub`'s heartbeat counter released from clk_sys with no synchroniser: cosmetic

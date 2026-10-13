@@ -393,3 +393,78 @@ its references until the next IDR, and nothing the rig reads today (the error co
 viewer) can see a slightly wrong pixel. Lowering it wants an instrument first: a checksum of
 each decoded picture in the status block against a software decode of the same clip, run warm
 for hours on a deliberately marginal build.
+
+## 8. The 93 % ALM retime (`perf/retime`, 2026-10-13)
+
+**Why.** From chroma reconstruction (2026-10-10, 93 % ALM) every RTL branch missed clk_dec's 101.4 MHz
+gate on its first fit and needed a seed sweep -- interface 1.1's failed nine seeds before a second sweep found
+one; `fix/chroma-field`'s missed SEEDs 1-4. Each change was small and far from the decoder; the seed moved
+the decoder's own placement, and fits landed 96-103 MHz either side of the gate. Decided with the maintainer
+(2026-10-13): retime the decoder's paths, the `hw_budget_and_lessons.md` §5 playbook, aiming at ~105 MHz on a
+first roll.
+
+**The census** (every endpoint below 105 MHz -- slack 0.846 ns at the 96.43 MHz constraint -- at both slow
+corners) on main's netlist at three seeds:
+
+| path | SEED 5 (-40 / 100) | SEED 4 | SEED 2 |
+|---|---|---|---|
+| recon_top: `sz_prod` (w x h) -> the 3,600 compare -> `ref_size` / the hand-off | 15 / 50 | 16 / 16 | -- |
+| mc_interp: `fy_7` -> Table 8-12's select -> the average -> `fmem`'s write | 6 / 8 | 15 / 8 | -- |
+| recon_hdr: the FIFO's word -> the router -> the field decode | 2 / -- | -- / 8 | 11 / 16 |
+| recon_inter: `kb` -> `tgt` / `q_n` / `wt_addr` | 3 / -- | -- / 7 | 1 / 3 |
+| mv_pred: `dec_done` -> `nb_sel_q`; `t2_py` -> the motion RAM | -- | 1 / 1 | 14 / 10 |
+| intra_pred, mb_intake, recon_mb (`r_blk` -> `dc_nz`), recon_lists, recon_dpb | 2-4 each | 5-9 | 1-3 |
+
+Different seeds, different clusters: placement. The fixes went to the paths present on most seeds.
+
+**Round 1** (`a7a3bf1`): recon_top's size check in three registered steps (the sides, the product, the
+compare; recon_dpb takes the slice at `sr_d3`, two cycles a slice); mc_interp's S8 (Table 8-12's operands
+registered, the average and the FIFO write a stage later -- the output credits bound every sample in flight, so
+no flow-control change, every case still inside `LAT_MAX`); recon_inter's lane sample count registered per bank
+from its own descriptor; the header words and `hdr_end` registered into recon_hdr (a word registered as `clear`
+arrives is dropped). Benches: `run_recon_top.sh --red` ALL GREEN (95 mutations, S4-S6 re-anchored, S7 new),
+`run_mc.sh --red` (M16 new). **Fit SEED 5 first roll 103.22 / 102.17 PASS**; census 16 / 15 endpoints. ALUTs
++276, registers +229; the size product now maps to a 9x9 DSP (110 of 112).
+
+**Round 2** (`69cc881`): the two clusters left -- recon_mb's QPY and chroma QPs in two registered steps (settled
+by `A_QP`: the fields hold from `A_IDLE` through four load states), recon_inter's setup target's fields latched as
+the setup leaves `KS_IDLE` (one bank for the whole sequence; a claimed bank's descriptor holds). T13 / T14.
+
+**Round 2's seeds.** SEED 5 had passed first roll (104.2 / 103.21), but SEEDs 1 / 2 / 4 of the same netlist fitted
+93.08 / 96.83 / 99.93 (cold corner): the spread unchanged. Their censuses named the clusters round 3 took.
+
+**Round 3** (`88235c8`): mv_pred's 10:1 entry mux selected without `dec_done` (D whenever C is inside the macroblock:
+if C is available there the entry is internal and `nb_sel_q` unused; SEED 1 had 51 / 44 endpoints, negative); mb_intake's
+slot-use table registered from the layout's next values (equal on every cycle); recon_mb's uncoded-DC clears written
+from `r_blk` and its coded bit (the skip branch is taken for a DC block exactly when it is not coded). M23 / I14 / T15.
+Seeds 5 / 1 / 2 / 4: 93.37 / 101.0 / 100.53 / 94.23 -- again the same spread, the clusters elsewhere.
+
+**The fitter's target** (`h264/h264_fit.sdc`, `a1cb7d4`): Quartus' Auto Fit eases off once a clock's constraint is
+met, and clk_dec's is its real 96.43 MHz -- nothing asked the fitter for the gate's 101.4. 0.8 ns of extra setup
+uncertainty into clk_dec while `quartus_fit` runs (`quartus_sta`, the gate's report, never reads it) makes it aim at
+~104.5 MHz. Its own file, after `sys/sys.qip` in the qsf: `sys_top.sdc` derives the PLL clocks, and in `h264.sdc` (read
+first) the command matched no clock and was ignored -- the first try's fit identical to the bit. Round 3 with it:
+seeds 5 / 1 / 2 / 4 = 99.21 / **102.79 (102.28 at 100 C) PASS** / 99.26 / 96.79 -- about +2-3 MHz on average, the
+spread a little narrower, still one seed in four.
+
+| netlist (cold corner, MHz) | SEED 5 | SEED 1 | SEED 2 | SEED 4 |
+|---|---|---|---|---|
+| main | 102.18 | 97.82 | 96.40 | 98.63 |
+| round 2 | 103.21 | 93.08 | 96.83 | 99.93 |
+| round 3 | 93.37 | 101.0 | 100.53 | 94.23 |
+| round 3 + `h264_fit.sdc` | 99.21 | **102.79** | 99.26 | 96.79 |
+
+**The verdict** (decided with the maintainer 2026-10-13: merge as is): at 93-98 % ALM placement decides; a retime moves
+which paths fail, not the seed spread -- the playbook's stop rule (`hw_budget_and_lessons.md` §5, "stop when the census
+stops being one cluster") was met at round 2. Kept: the three rounds (bit-exact, each fix a real census cluster, no
+throughput cost) and the fitter's target; a sweep stays part of each RTL branch. **Not taken:** clk_dec lowered to ~90
+MHz (most seeds would pass; ~7 % throughput: 720p30 8 Mbit/s ~1.13x -> ~1.05x), and freeing logic (a project of its own).
+
+**On .201** (SEED 1, `H264_retimeoc_20261013_0846.rbf`), main's build (`H264_chromafieldsweep_20261013_0155.rbf`) the
+control arm, `h264play` with VUI pacing, idle = `rc_stall` over the pictures' play time at 96.43 MHz: the 10 Mbit/s
+Sunshine capture (1,315 pictures) idle 64.8 % on both; x264 720p30 8 Mbit/s (testsrc2 + noise, 600 pictures) idle
+17.5 % on both (1.21x) -- every picture, errors / late 0. The retime's added cycles (two a slice, one of mc_interp's
+latency) do not show.
+
+**Left alone:** mv_pred's temporal-direct stage (it writes the motion RAM at t2: a stage there moves the write against
+the next reads) and the single-seed clusters (cabac_engine, dequant_itrans, recon_dpb's `drop_n`, recon_lists).

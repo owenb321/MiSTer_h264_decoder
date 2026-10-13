@@ -42,6 +42,11 @@
 #       (only the bS-4 strong filter changes p2: the intra clip)
 #   R8  recon_deblock: a horizontal edge's rows written one sample rotated (p4) -> [post]
 #   R9  h264_pkg: 16 DPB stores instead of 20                     (r16)       -> [pre] / [count]
+#   T13 (perf/retime) recon_mb: the registered QP without mb_qp_delta (A_QP reads qp_new_q) (p4) -> [pre]
+#   T14 (perf/retime) recon_inter: the setup's list-0 reference never latched (its reset value) (CAWP5_TOSHIBA_E)
+#       -> [pre] (list 1's taken from list 0 survived every clip: both indices 0 there; recorded)
+#   T15 (perf/retime) recon_mb: an uncoded Cb DC block's flags never cleared (p4)              -> [pre]
+#       (Cb's clear from Cr's coded bit survived: a stale flag needs an uncoded AC block after it; recorded)
 #       (picture 17 is the first with 16 references + itself live)
 #   R10 recon_inter: the bi prefetch FIFO never advances         (bsp)       -> [pre]
 #   R11 recon_inter: row buffers 8..15 aliased onto 0..7 (the lanes) (p4)       -> [pre]
@@ -143,6 +148,8 @@
 #   S5  recon_top: no bound (a 3,780-macroblock picture decoded into a 2 MiB store) (big) -> [refuse]
 #   S6  recon_top: the refused slice still handed to recon_dpb (a store opened, the unwritten
 #       store emitted to the display: the defect found 2026-10-02, the 1,620 bound had it) (big) -> [refuse]
+#   S7  recon_top: (perf/retime) the slice handed to recon_dpb a cycle before the registered compare
+#       settles (sr_d2: the previous slice's verdict -- reset's 0 for the first)          (big) -> [refuse]
 #
 # Interface 0.16, the colour (docs/colour.md): twenty clips of two IDR pictures, the VUI written by ffmpeg's
 #   h264_metadata (every Table E-5 class, both ranges, the size rule at 1,280 wide / 576 and 592 high / a
@@ -562,6 +569,11 @@ PYEOF
   mut R6 h264/dec/recon_inter.sv "wp_mode <= 2'd1; wp_logwd <= 3'd5;" "wp_mode <= 2'd1; wp_logwd <= 3'd4;" wb pre &
   mut R7 h264/dec/recon_deblock.sv "(is_c ? 8'h08 : 8'h0E) << poff" "(is_c ? 8'h08 : 8'h0C) << poff" i2 post &
   mut R9 h264/dec/h264_pkg.sv "localparam int NSTORE = 20;" "localparam int NSTORE = 16;" r16 "pre|count|hang" &
+  # (perf/retime round 2) the registered QP: the delta lost in qp_new_q; the setup's latched list-1 reference
+  # (mvq is fixed-QP: no mb_qp_delta -- T13 is equivalent there; p4 is CRF with x264's adaptive QP)
+  mut T13 h264/dec/recon_mb.sv "always_ff @(posedge clk) begin qp_new_q <= qp_new;" "always_ff @(posedge clk) begin qp_new_q <= qp_pred;" p4 pre &
+  mut T14 h264/dec/recon_inter.sv "ls_gref0 <= sd_gref0; ls_gref1 <= sd_gref1;" "ls_gref1 <= sd_gref1;" CAWP5_TOSHIBA_E pre &
+  mut T15 h264/dec/recon_mb_fsm.svh "if (r_blk == 5'd17 && !g_coded[17]) dc_nz[19:16] <= '0;" "if (1'b0) dc_nz[19:16] <= '0;" p4 pre &
   mut R8 h264/dec/recon_deblock.sv "wr_data <= hr[1]; wr_be <= 8'hFF;" \
          "wr_data <= {hr[1][7:0], hr[1][63:8]}; wr_be <= 8'hFF;" p4 post &
   mut R10 h264/dec/recon_inter.sv "if (h_bi && wp_a_ready[ln]) pf_h <= pf_h + 1'b1;" "if (1'b0) pf_h <= pf_h + 1'b1;" bsp pre &
@@ -585,9 +597,11 @@ PYEOF
          "base_q <= dpb_base + {7'd0, gcode_q[6:2], 17'd0} + plane_off;" hd pre &
   mut S3 h264/dec/recon_mb_fsm.svh "wire  [28:0] col_base_w = dpb_base + {6'd0, col_store, 18'd0} + off_side;" \
          "wire  [28:0] col_base_w = dpb_base + {7'd0, col_store, 17'd0} + off_side;" hd pre &
-  mut S4 h264/dec/recon_top.sv "wire         sz_over = (sz_prod > 21'd3600);" "wire         sz_over = (sz_prod > 21'd1620);" hd "count|hang|out" &
-  mut S5 h264/dec/recon_top.sv "wire         sz_over = (sz_prod > 21'd3600);" "wire         sz_over = 1'b0;" big refuse +expect_refused &
-  mut S6 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d1 && !sz_over;" "wire         dpb_slice_ready = sr_d1;" big refuse +expect_refused &
+  mut S4 h264/dec/recon_top.sv "sz_over <= (sz_prod > 21'd3600);" "sz_over <= (sz_prod > 21'd1620);" hd "count|hang|out" &
+  mut S5 h264/dec/recon_top.sv "sz_over <= (sz_prod > 21'd3600);" "sz_over <= 1'b0;" big refuse +expect_refused &
+  mut S6 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d3 && !sz_over;" "wire         dpb_slice_ready = sr_d3;" big refuse +expect_refused &
+  # (perf/retime) the size's register stages: the hand-off a cycle before the compare has settled
+  mut S7 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d3 && !sz_over;" "wire         dpb_slice_ready = sr_d2 && !sz_over;" big refuse +expect_refused &
   wait
   # P5d, the output process (sequenced: memory)
   mut O1 h264/dec/recon_dpb.sv "(!best_found || sq_poc < best_poc)" "(!best_found || sq_poc > best_poc)" c44b out &

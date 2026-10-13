@@ -372,6 +372,12 @@ module mv_pred (
     logic [1:0]  gi;
     assign mvd_ra = {gi[0], blk0};         // gi 0: list 0, gi 1: list 1 (the partition's first block)
     wire  [4:0]  selX = (gi == 2'd0) ? selA : (gi == 2'd1) ? selB : selC;
+    // (perf/retime, 2026-10-13) the neighbour entry mux's select without dec_done: dec_done decides C only when
+    // C is inside this macroblock (lkk 2), and then either C is available -- selX is internal (bit 4 clear),
+    // read from cur_q, nb_sel_q unused -- or D replaces it, which this select already takes. dec_done ->
+    // the C -> D substitution -> the 10:1 entry mux -> nb_sel_q was a census cluster
+    wire  [4:0]  selC_nb = (lkk[2] == 2'd2) ? lksel[3] : selC;
+    wire  [4:0]  selXn = (gi == 2'd0) ? selA : (gi == 2'd1) ? selB : selC_nb;
     wire         avX  = (gi == 2'd0) ? avA  : (gi == 2'd1) ? avB  : avC;
     logic [4:0]  gs_sel;                   // the entry addressed last cycle
     logic        gs_av;
@@ -385,7 +391,7 @@ module mv_pred (
     always_comb begin
         nb_sel = nb_data[0 +: 80]; nb_sel_intra = nb_intra[0];
         for (int k = 1; k < 10; k++)
-            if (selX[3:0] == k[3:0]) begin nb_sel = nb_data[80*k +: 80]; nb_sel_intra = nb_intra[k]; end
+            if (selXn[3:0] == k[3:0]) begin nb_sel = nb_data[80*k +: 80]; nb_sel_intra = nb_intra[k]; end
         for (int l = 0; l < 2; l++) begin
             if (nb_sel_intra_q || !nb_sel_q[40*l + 38])
                 nbn_sel[38*l +: 38] = MW_NONE;
