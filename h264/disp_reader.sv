@@ -276,6 +276,8 @@ module disp_reader #(
     logic signed [43:0] c_a, c_b, c_u;
     logic        c_cp, c_hs;               // the field p (a store of fields), the centred horizontal siting
     logic [16:0] c_voff;                   // the vertical siting's offset (Q.16: 0, 1/2, 1 luma row)
+    wire  [17:0] c_vfs = {1'b0, c_voff} + {1'b0, c_cp, 16'd0};
+    wire  [16:0] c_vf  = c_vfs[17:1];      // a field's: (voff + p) / 2 of its own line pair (0 .. 1)
     logic [11:0] c_k0, c_k1, c_r0, c_r1;
     logic [7:0]  c_w;
     logic        ch0, ch1;
@@ -457,8 +459,9 @@ module disp_reader #(
                             2'd2: ln_u <= ln_um >>> 2;
                             default: ln_u <= ln_um >>> 3;
                         endcase
-                        // ... less the siting's offset (a field's rows halved first)
-                        c_b <= (cfield ? (c_a >>> 1) : c_a) - $signed({27'd0, c_voff});
+                        // ... less the siting's offset (a field's rows halved first; a field's offset is
+                        // (voff + p) / 2 of its own line pair -- Figure E-1's field siting, chroma.md §2)
+                        c_b <= cfield ? ((c_a >>> 1) - $signed({27'd0, c_vf})) : (c_a - $signed({27'd0, c_voff}));
                         lseq <= 4'd8;
                     end
                     4'd8: begin
