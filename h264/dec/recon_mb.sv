@@ -362,8 +362,14 @@ module recon_mb (
         if (qp_sum < 0) qp_sum = qp_sum + 8'sd52; else if (qp_sum > 51) qp_sum = qp_sum - 8'sd52;
         qp_new = qp_sum[5:0];
     end
-    qpc_lookup u_qpc_n0 (.q(qp_new), .off(cb_qp_off), .qpc(qpc_n0));
-    qpc_lookup u_qpc_n1 (.q(qp_new), .off(cr_qp_off), .qpc(qpc_n1));
+    // (perf/retime, 2026-10-13) QPY and the chroma QPs registered in two steps -- qp_pred + mb_qp_delta ->
+    // the wrap -> Table 8-15 -> A_QP's registers was a census cluster. Both inputs hold for the A stage's
+    // four load cycles before A_QP (the macroblock's fields from A_IDLE; qp_pred changes only at A_QP or a
+    // slice start in A_IDLE), so qp_new_q (one cycle) and qpc_n*_q (two) are settled there
+    logic [5:0]  qp_new_q, qpc_n0_q, qpc_n1_q;
+    qpc_lookup u_qpc_n0 (.q(qp_new_q), .off(cb_qp_off), .qpc(qpc_n0));
+    qpc_lookup u_qpc_n1 (.q(qp_new_q), .off(cr_qp_off), .qpc(qpc_n1));
+    always_ff @(posedge clk) begin qp_new_q <= qp_new; qpc_n0_q <= qpc_n0; qpc_n1_q <= qpc_n1; end
     qpc_lookup u_qpc_p0 (.q(6'd0),   .off(cb_qp_off), .qpc(qpc_p0));
     qpc_lookup u_qpc_p1 (.q(6'd0),   .off(cr_qp_off), .qpc(qpc_p1));
 

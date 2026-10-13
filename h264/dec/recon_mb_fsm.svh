@@ -802,14 +802,14 @@
                 end
                 // ---- QP, the residual engine's request, the branch ----------------------------
                 A_QP: if (mb_pcm || !rq_v) begin
-                    a_qp <= qp_new; qp_pred <= qp_new;
-                    a_qpc0 <= qpc_n0; a_qpc1 <= qpc_n1;
+                    a_qp <= qp_new_q; qp_pred <= qp_new_q;
+                    a_qpc0 <= qpc_n0_q; a_qpc1 <= qpc_n1_q;
                     a_pcm_qpc0 <= qpc_p0; a_pcm_qpc1 <= qpc_p1;
                     a_intra <= mb_is_intra && !mb_skip; a_pcm <= mb_pcm;
                     a_i4 <= mb_is_intra && !mb_skip && mb_itype == 5'd0;
                     a_t8 <= mb_t8;                    // (mb_intake: 0 unless coded, I_NxN or inter)
                     if (!mb_pcm) begin                // the residual engine walks this macroblock
-                        rq_v <= 1'b1; rq_qp <= qp_new; rq_qpc0 <= qpc_n0; rq_qpc1 <= qpc_n1;
+                        rq_v <= 1'b1; rq_qp <= qp_new_q; rq_qpc0 <= qpc_n0_q; rq_qpc1 <= qpc_n1_q;
                         rq_intra <= mb_is_intra && !mb_skip; rq_i4 <= mb_is_intra && !mb_skip && mb_itype == 5'd0;
                         rq_t8 <= mb_t8; rq_coded <= mb_coded; rq_cbank <= mb_cbank; rq_rbank <= a_rbank;
                     end

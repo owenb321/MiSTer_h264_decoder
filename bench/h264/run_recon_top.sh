@@ -42,6 +42,8 @@
 #       (only the bS-4 strong filter changes p2: the intra clip)
 #   R8  recon_deblock: a horizontal edge's rows written one sample rotated (p4) -> [post]
 #   R9  h264_pkg: 16 DPB stores instead of 20                     (r16)       -> [pre] / [count]
+#   T13 (perf/retime) recon_mb: the registered QP without mb_qp_delta (A_QP reads qp_new_q) (mvq) -> [pre]
+#   T14 (perf/retime) recon_inter: the setup's latched list-1 reference taken from list 0 (wb)  -> [pre]
 #       (picture 17 is the first with 16 references + itself live)
 #   R10 recon_inter: the bi prefetch FIFO never advances         (bsp)       -> [pre]
 #   R11 recon_inter: row buffers 8..15 aliased onto 0..7 (the lanes) (p4)       -> [pre]
@@ -564,6 +566,9 @@ PYEOF
   mut R6 h264/dec/recon_inter.sv "wp_mode <= 2'd1; wp_logwd <= 3'd5;" "wp_mode <= 2'd1; wp_logwd <= 3'd4;" wb pre &
   mut R7 h264/dec/recon_deblock.sv "(is_c ? 8'h08 : 8'h0E) << poff" "(is_c ? 8'h08 : 8'h0C) << poff" i2 post &
   mut R9 h264/dec/h264_pkg.sv "localparam int NSTORE = 20;" "localparam int NSTORE = 16;" r16 "pre|count|hang" &
+  # (perf/retime round 2) the registered QP: the delta lost in qp_new_q; the setup's latched list-1 reference
+  mut T13 h264/dec/recon_mb.sv "always_ff @(posedge clk) begin qp_new_q <= qp_new;" "always_ff @(posedge clk) begin qp_new_q <= qp_pred;" mvq pre &
+  mut T14 h264/dec/recon_inter.sv "ls_gref1 <= sd_gref1; ls_bi <= sd_bi;" "ls_gref1 <= sd_gref0; ls_bi <= sd_bi;" wb pre &
   mut R8 h264/dec/recon_deblock.sv "wr_data <= hr[1]; wr_be <= 8'hFF;" \
          "wr_data <= {hr[1][7:0], hr[1][63:8]}; wr_be <= 8'hFF;" p4 post &
   mut R10 h264/dec/recon_inter.sv "if (h_bi && wp_a_ready[ln]) pf_h <= pf_h + 1'b1;" "if (1'b0) pf_h <= pf_h + 1'b1;" bsp pre &
