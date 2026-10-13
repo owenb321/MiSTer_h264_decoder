@@ -400,6 +400,9 @@
 #     gate PASS (X0_Y5_N1); ALM 39,079 (93 %), RAM 421, DSP 109, H264_fit169sweep_20261011_2130.rbf. SEED 1 pinned.
 #   2026-10-12 fix/fit-anamorphic + fit_fill (the SD HDMI modes filled under Fit): SEED 1 first roll PASS, clk_dec 102.99 /
 #     101.87, clk_vid 94.23 / 89.61, HDMI gate PASS (X0_Y5_N1); ALM 39,076 (93 %), H264_fit169_20261012_0103.rbf.
+#   2026-10-13 fix/chroma-field (a field store's chroma at Figure E-1's field siting; f0c378b): SEED 1 first roll
+#     MARGINAL, clk_dec 99.58 / 97.82 (gate 101.4), clk_vid 90.37 / 87.24 PASS, HDMI gate PASS (X0_Y5_N1);
+#     H264_chromafield_MARGINAL_20261013_0049.rbf. Sweep follows.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
