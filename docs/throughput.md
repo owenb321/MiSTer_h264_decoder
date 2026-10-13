@@ -393,3 +393,44 @@ its references until the next IDR, and nothing the rig reads today (the error co
 viewer) can see a slightly wrong pixel. Lowering it wants an instrument first: a checksum of
 each decoded picture in the status block against a software decode of the same clip, run warm
 for hours on a deliberately marginal build.
+
+## 8. The 93 % ALM retime (`perf/retime`, 2026-10-13)
+
+**Why.** From chroma reconstruction (2026-10-10, 93 % ALM) every RTL branch missed clk_dec's 101.4 MHz
+gate on its first fit and needed a seed sweep -- interface 1.1's failed nine seeds before a second sweep found
+one; `fix/chroma-field`'s missed SEEDs 1-4. Each change was small and far from the decoder; the seed moved
+the decoder's own placement, and fits landed 96-103 MHz either side of the gate. Decided with the maintainer
+(2026-10-13): retime the decoder's paths, the `hw_budget_and_lessons.md` §5 playbook, aiming at ~105 MHz on a
+first roll.
+
+**The census** (every endpoint below 105 MHz -- slack 0.846 ns at the 96.43 MHz constraint -- at both slow
+corners) on main's netlist at three seeds:
+
+| path | SEED 5 (-40 / 100) | SEED 4 | SEED 2 |
+|---|---|---|---|
+| recon_top: `sz_prod` (w x h) -> the 3,600 compare -> `ref_size` / the hand-off | 15 / 50 | 16 / 16 | -- |
+| mc_interp: `fy_7` -> Table 8-12's select -> the average -> `fmem`'s write | 6 / 8 | 15 / 8 | -- |
+| recon_hdr: the FIFO's word -> the router -> the field decode | 2 / -- | -- / 8 | 11 / 16 |
+| recon_inter: `kb` -> `tgt` / `q_n` / `wt_addr` | 3 / -- | -- / 7 | 1 / 3 |
+| mv_pred: `dec_done` -> `nb_sel_q`; `t2_py` -> the motion RAM | -- | 1 / 1 | 14 / 10 |
+| intra_pred, mb_intake, recon_mb (`r_blk` -> `dc_nz`), recon_lists, recon_dpb | 2-4 each | 5-9 | 1-3 |
+
+Different seeds, different clusters: placement. The fixes went to the paths present on most seeds.
+
+**Round 1** (`a7a3bf1`): recon_top's size check in three registered steps (the sides, the product, the
+compare; recon_dpb takes the slice at `sr_d3`, two cycles a slice); mc_interp's S8 (Table 8-12's operands
+registered, the average and the FIFO write a stage later -- the output credits bound every sample in flight, so
+no flow-control change, every case still inside `LAT_MAX`); recon_inter's lane sample count registered per bank
+from its own descriptor; the header words and `hdr_end` registered into recon_hdr (a word registered as `clear`
+arrives is dropped). Benches: `run_recon_top.sh --red` ALL GREEN (95 mutations, S4-S6 re-anchored, S7 new),
+`run_mc.sh --red` (M16 new). **Fit SEED 5 first roll 103.22 / 102.17 PASS**; census 16 / 15 endpoints. ALUTs
++276, registers +229; the size product now maps to a 9x9 DSP (110 of 112).
+
+**Round 2** (`69cc881`): the two clusters left -- recon_mb's QPY and chroma QPs in two registered steps (settled
+by `A_QP`: the fields hold from `A_IDLE` through four load states), recon_inter's setup target's fields latched as
+the setup leaves `KS_IDLE` (one bank for the whole sequence; a claimed bank's descriptor holds). T13 / T14.
+
+**Left alone:** mv_pred (its neighbour select reads `dec_done` live, which the previous partition may still be
+writing; its temporal-direct stage writes the motion RAM at t2, so a stage there moves the write against the next
+reads) and recon_mb's `r_blk` -> `dc_nz` (the skip decision clears `dc_nz` while reading it) -- each seen on one or
+two seeds only.

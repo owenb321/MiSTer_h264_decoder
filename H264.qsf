@@ -411,6 +411,9 @@
 #     per-bank count, the header words registered into recon_hdr): SEED 5 first roll PASS, clk_dec 103.22 / 102.17,
 #     clk_vid 93.74 / 90.74, HDMI gate PASS; ALUTs +276, registers +229, ALM 41,158 (98 %: packing), DSP 110,
 #     H264_retime_20261013_0338.rbf. Census below 105 MHz: 16 / 15 endpoints (was 30-75 on main's seeds 5 / 4 / 2).
+#   2026-10-13 perf/retime round 2 (69cc881: recon_mb's QP in two steps, recon_inter's setup fields latched): SEED 5
+#     first roll PASS, clk_dec 104.2 / 103.21, clk_vid 91.92 / 90.57, HDMI gate PASS; ALUTs 60,631, registers 56,049,
+#     ALM 40,994 (98 %: packing), DSP 110, H264_retime_20261013_0435.rbf. Census below 105 MHz: 5 / 7, scattered.
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
