@@ -414,6 +414,12 @@
 #   2026-10-13 perf/retime round 2 (69cc881: recon_mb's QP in two steps, recon_inter's setup fields latched): SEED 5
 #     first roll PASS, clk_dec 104.2 / 103.21, clk_vid 91.92 / 90.57, HDMI gate PASS; ALUTs 60,631, registers 56,049,
 #     ALM 40,994 (98 %: packing), DSP 110, H264_retime_20261013_0435.rbf. Census below 105 MHz: 5 / 7, scattered.
+#   2026-10-13 perf/retime seeds of round 2's netlist: 1 95.33/93.08, 2 95.77/96.83, 4 99.54/99.93 -- the spread unchanged.
+#   2026-10-13 perf/retime round 3 (88235c8: mb_intake's uses registered, mv_pred's entry select, recon_mb's DC clears):
+#     5 93.33/93.37, 1 103.31/101.0, 2 98.33/100.53, 4 95.85/94.23 (all MARGINAL). Then h264/h264_fit.sdc (a1cb7d4: the
+#     fitter aims clk_dec at ~104.5 MHz, quartus_sta unaffected): 5 98.6/99.21, **SEED 1 102.28/102.79 PASS**, 2
+#     102.47/99.26, 4 98.02/96.79; HDMI gate PASS; H264_retimeoc_20261013_0846.rbf. SEED 1 pinned. (docs/throughput.md
+#     S8: at 93-98 % ALM placement decides; the retime moved the clusters, not the seed spread.)
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
@@ -518,4 +524,4 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS=1"
 set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 set_global_assignment -name FITTER_AGGRESSIVE_ROUTABILITY_OPTIMIZATION ALWAYS
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL NORMAL
-set_global_assignment -name SEED 5
+set_global_assignment -name SEED 1
