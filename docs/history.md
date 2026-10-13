@@ -1737,3 +1737,15 @@ The same ~1.4 % residual (at most 3 codes) on both builds: the decode / conversi
 **The swept build** (SEED 5 PASS 105.24 / 102.18, `H264_chromafieldsweep_20261013_0155.rbf`; SEEDs 2-4 missed) on .201 through
 the same script: 98.61 % exact, 99.99 % within 2, max 3 (main's rule 1.25 %); HDMI 27.000 MHz. (.201 was running a DVD
 harness Main left from that session's round -- Main's binary-switch trap; the raster does not depend on it.)
+
+## 50. The 93 % ALM retime and the fitter's target (perf/retime, 2026-10-13)
+
+`docs/throughput.md` §8. Every RTL branch since 93 % ALM had needed a seed sweep. Three retime rounds from the census
+(recon_top's size check, mc_interp S8, recon_inter's bank count and setup fields, the header words into recon_hdr,
+recon_mb's QP and DC clears, mb_intake's slot-use table, mv_pred's entry select) removed their clusters but not the
+seed spread (each netlist ~93-104 MHz across seeds 5 / 1 / 2 / 4); `h264/h264_fit.sdc` -- the fitter aiming clk_dec at
+~104.5 MHz -- added ~2-3 MHz on average. Pinned SEED 1, 102.28 / 102.79 PASS (`H264_retimeoc_20261013_0846.rbf`).
+
+**On .201**, main's build the control arm, `h264play` with VUI pacing (idle = `rc_stall` over the play time at 96.43
+MHz): the 10 Mbit/s Sunshine capture idle 64.8 % on both; x264 720p30 8 Mbit/s 17.5 % on both (1.21x); every picture,
+errors / late 0. (.201 had a DVD harness Main resident from that session's round; the measurement does not depend on it.)

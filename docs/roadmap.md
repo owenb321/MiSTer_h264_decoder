@@ -1014,6 +1014,16 @@ Figure E-1 puts it at `(voff + p) / 2`. Field-coded content only (interlaced H.2
 - [x] On .201 against the golden, main's build as the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %).
 - [x] A passing seed: SEED 5 105.24 / 102.18 (SEEDs 1-4 missed), HDMI gate PASS; the same result on .201.
 
+## The 93 % ALM retime and the fitter's target (2026-10-13, `perf/retime`) -- 🔧 built
+
+`docs/throughput.md` §8, `history.md` §50. Every branch since 93 % ALM needed a seed sweep; agreed with the maintainer
+to retime.
+- [x] Three rounds from the census (seven modules), bit-exact: `run_recon_top.sh`, `run_mc.sh`, `run_mb_intake.sh`,
+      `run_mv_pred.sh` `--red`; the cosim.
+- [x] `h264/h264_fit.sdc`: the fitter aims clk_dec at ~104.5 MHz (+2-3 MHz on average across seeds).
+- [x] Result: the seed spread is placement's (~93-104 MHz either way); SEED 1 102.28 / 102.79 PASS pinned; on .201 no
+      throughput change against main, errors 0. Decided: merge as is; sweeps stay; clk_dec not lowered.
+
 ## Phase 7 — For integrators
 
 - [x] ✅ **The interface frozen at 1.0 -- MERGED (PR fj#43)** (2026-10-07; `architecture.md` "Version 1.0",

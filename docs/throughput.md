@@ -430,7 +430,41 @@ arrives is dropped). Benches: `run_recon_top.sh --red` ALL GREEN (95 mutations, 
 by `A_QP`: the fields hold from `A_IDLE` through four load states), recon_inter's setup target's fields latched as
 the setup leaves `KS_IDLE` (one bank for the whole sequence; a claimed bank's descriptor holds). T13 / T14.
 
-**Left alone:** mv_pred (its neighbour select reads `dec_done` live, which the previous partition may still be
-writing; its temporal-direct stage writes the motion RAM at t2, so a stage there moves the write against the next
-reads) and recon_mb's `r_blk` -> `dc_nz` (the skip decision clears `dc_nz` while reading it) -- each seen on one or
-two seeds only.
+**Round 2's seeds.** SEED 5 had passed first roll (104.2 / 103.21), but SEEDs 1 / 2 / 4 of the same netlist fitted
+93.08 / 96.83 / 99.93 (cold corner): the spread unchanged. Their censuses named the clusters round 3 took.
+
+**Round 3** (`88235c8`): mv_pred's 10:1 entry mux selected without `dec_done` (D whenever C is inside the macroblock:
+if C is available there the entry is internal and `nb_sel_q` unused; SEED 1 had 51 / 44 endpoints, negative); mb_intake's
+slot-use table registered from the layout's next values (equal on every cycle); recon_mb's uncoded-DC clears written
+from `r_blk` and its coded bit (the skip branch is taken for a DC block exactly when it is not coded). M23 / I14 / T15.
+Seeds 5 / 1 / 2 / 4: 93.37 / 101.0 / 100.53 / 94.23 -- again the same spread, the clusters elsewhere.
+
+**The fitter's target** (`h264/h264_fit.sdc`, `a1cb7d4`): Quartus' Auto Fit eases off once a clock's constraint is
+met, and clk_dec's is its real 96.43 MHz -- nothing asked the fitter for the gate's 101.4. 0.8 ns of extra setup
+uncertainty into clk_dec while `quartus_fit` runs (`quartus_sta`, the gate's report, never reads it) makes it aim at
+~104.5 MHz. Its own file, after `sys/sys.qip` in the qsf: `sys_top.sdc` derives the PLL clocks, and in `h264.sdc` (read
+first) the command matched no clock and was ignored -- the first try's fit identical to the bit. Round 3 with it:
+seeds 5 / 1 / 2 / 4 = 99.21 / **102.79 (102.28 at 100 C) PASS** / 99.26 / 96.79 -- about +2-3 MHz on average, the
+spread a little narrower, still one seed in four.
+
+| netlist (cold corner, MHz) | SEED 5 | SEED 1 | SEED 2 | SEED 4 |
+|---|---|---|---|---|
+| main | 102.18 | 97.82 | 96.40 | 98.63 |
+| round 2 | 103.21 | 93.08 | 96.83 | 99.93 |
+| round 3 | 93.37 | 101.0 | 100.53 | 94.23 |
+| round 3 + `h264_fit.sdc` | 99.21 | **102.79** | 99.26 | 96.79 |
+
+**The verdict** (decided with the maintainer 2026-10-13: merge as is): at 93-98 % ALM placement decides; a retime moves
+which paths fail, not the seed spread -- the playbook's stop rule (`hw_budget_and_lessons.md` §5, "stop when the census
+stops being one cluster") was met at round 2. Kept: the three rounds (bit-exact, each fix a real census cluster, no
+throughput cost) and the fitter's target; a sweep stays part of each RTL branch. **Not taken:** clk_dec lowered to ~90
+MHz (most seeds would pass; ~7 % throughput: 720p30 8 Mbit/s ~1.13x -> ~1.05x), and freeing logic (a project of its own).
+
+**On .201** (SEED 1, `H264_retimeoc_20261013_0846.rbf`), main's build (`H264_chromafieldsweep_20261013_0155.rbf`) the
+control arm, `h264play` with VUI pacing, idle = `rc_stall` over the pictures' play time at 96.43 MHz: the 10 Mbit/s
+Sunshine capture (1,315 pictures) idle 64.8 % on both; x264 720p30 8 Mbit/s (testsrc2 + noise, 600 pictures) idle
+17.5 % on both (1.21x) -- every picture, errors / late 0. The retime's added cycles (two a slice, one of mc_interp's
+latency) do not show.
+
+**Left alone:** mv_pred's temporal-direct stage (it writes the motion RAM at t2: a stage there moves the write against
+the next reads) and the single-seed clusters (cabac_engine, dequant_itrans, recon_dpb's `drop_n`, recon_lists).
