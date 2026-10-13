@@ -1613,11 +1613,16 @@
                     end
                     coded = g_coded[slot];
                     is_dc = (kind == 3'd3 || kind == 3'd4);
+                    // an uncoded DC block clears its flags (perf/retime, 2026-10-13: written from r_blk and its
+                    // coded bit alone -- the skip branch below is taken for a DC block exactly when it is not
+                    // coded, so the dc_nz lookup that decides it for AC blocks left these clears' cone; r_blk ->
+                    // dc_ra -> dc_nz[dc_ra] -> the branch -> dc_nz was a census cluster). Slots: 0 luma, 17 / 18
+                    if (r_blk == 5'd0  && !g_coded[0])  dc_nz[15:0]  <= '0;
+                    if (r_blk == 5'd17 && !g_coded[17]) dc_nz[19:16] <= '0;
+                    if (r_blk == 5'd22 && !g_coded[18]) dc_nz[23:20] <= '0;
                     if (r_blk == 5'd27) rs <= R_IDLE;
                     else if (!coded && (is_dc || !dcnz)) begin
                         // no levels and no DC: nothing to transform
-                        if (kind == 3'd3) dc_nz[15:0] <= '0;
-                        if (kind == 3'd4) begin if (c) dc_nz[23:20] <= '0; else dc_nz[19:16] <= '0; end
                         if (kind == 3'd5) begin
                             for (int k = 0; k < 4; k++) begin res_rdy[{g_rbank, id + k[4:0]}] <= 1'b1; res_zero[{g_rbank, id + k[4:0]}] <= 1'b1; end
                             r_blk <= r_blk + 5'd4;

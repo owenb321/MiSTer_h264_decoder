@@ -233,13 +233,15 @@ module mb_intake (
     end
 
     // ---- slot searches (combinational; per list) ------------------------------------------
-    // uses[lx][slot]: the slot predicts from list lx
+    // uses[lx][slot]: the slot predicts from list lx. (perf/retime, 2026-10-13) registered from the layout's
+    // next values on the same edge as n_slots / slot_lists, so it equals the old (b < n_slots) && slot_lists[b][lx]
+    // on every cycle -- the compare and the AND came off the ref_idx / mvd words' slot searches (n_slots ->
+    // uses -> ref_sel -> w_refs' write select was a census cluster)
     logic [3:0] uses [0:1];
-    always_comb begin
+    always_ff @(posedge clk)
         for (int lx = 0; lx < 2; lx++)
             for (int b = 0; b < 4; b++)
-                uses[lx][b] = (b[2:0] < n_slots) && slot_lists[b][lx];
-    end
+                uses[lx][b] <= (b[2:0] < n_slots_c) && slot_lists_c[b][lx];
     // the first slot >= from[lx] using lx (4 = none), for the ref cursor and the mvd cursor
     logic [2:0] ref_next [0:1], ref_sel [0:1];
     logic [2:0] mv_slot [0:1], mv_after [0:1];

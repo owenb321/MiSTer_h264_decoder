@@ -44,6 +44,7 @@
 #   R9  h264_pkg: 16 DPB stores instead of 20                     (r16)       -> [pre] / [count]
 #   T13 (perf/retime) recon_mb: the registered QP without mb_qp_delta (A_QP reads qp_new_q) (mvq) -> [pre]
 #   T14 (perf/retime) recon_inter: the setup's latched list-1 reference taken from list 0 (wb)  -> [pre]
+#   T15 (perf/retime) recon_mb: Cb's uncoded DC clear read from Cr's coded bit (p4)            -> [pre]
 #       (picture 17 is the first with 16 references + itself live)
 #   R10 recon_inter: the bi prefetch FIFO never advances         (bsp)       -> [pre]
 #   R11 recon_inter: row buffers 8..15 aliased onto 0..7 (the lanes) (p4)       -> [pre]
@@ -569,6 +570,7 @@ PYEOF
   # (perf/retime round 2) the registered QP: the delta lost in qp_new_q; the setup's latched list-1 reference
   mut T13 h264/dec/recon_mb.sv "always_ff @(posedge clk) begin qp_new_q <= qp_new;" "always_ff @(posedge clk) begin qp_new_q <= qp_pred;" mvq pre &
   mut T14 h264/dec/recon_inter.sv "ls_gref1 <= sd_gref1; ls_bi <= sd_bi;" "ls_gref1 <= sd_gref0; ls_bi <= sd_bi;" wb pre &
+  mut T15 h264/dec/recon_mb_fsm.svh "if (r_blk == 5'd17 && !g_coded[17]) dc_nz[19:16] <= '0;" "if (r_blk == 5'd17 && !g_coded[18]) dc_nz[19:16] <= '0;" p4 pre &
   mut R8 h264/dec/recon_deblock.sv "wr_data <= hr[1]; wr_be <= 8'hFF;" \
          "wr_data <= {hr[1][7:0], hr[1][63:8]}; wr_be <= 8'hFF;" p4 post &
   mut R10 h264/dec/recon_inter.sv "if (h_bi && wp_a_ready[ln]) pf_h <= pf_h + 1'b1;" "if (1'b0) pf_h <= pf_h + 1'b1;" bsp pre &

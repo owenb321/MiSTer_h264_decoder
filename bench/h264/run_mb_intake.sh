@@ -33,6 +33,7 @@
 #   I11 nz not OR-ed per 8x8 with the 8x8 transform                 -> x264 High P/B
 #   I12 an 8x8 block's 64 levels all into its first slot            -> x264 High P/B
 #   I13 transform_size_8x8_flag kept from the previous macroblock   -> x264 High intra
+#   I14 (perf/retime) the slot-use table a cycle late (from the registered layout) -> x264 B
 set -u
 cd "$(dirname "$0")/../.."
 mkdir -p .sim
@@ -160,6 +161,8 @@ PYEOF
   mut I11 "mb_nz <= w_t8 ? {{4{|w_nz[15:12]}}, {4{|w_nz[11:8]}}, {4{|w_nz[7:4]}}, {4{|w_nz[3:0]}}} : w_nz;" "mb_nz <= w_nz;" h &
   mut I12 "{blk_slot + (blk_l8 ? {3'd0, blk_pos[5:4]} : 5'd0), blk_pos[3:0]}" "{blk_slot, blk_pos[3:0]}" h &
   mut I13 "w_coded <= '0; w_nz <= '0; w_pcm <= 1'b0; w_t8 <= 1'b0;" "w_coded <= '0; w_nz <= '0; w_pcm <= 1'b0;" hi &
+  # (perf/retime) uses registered from the layout's next values: built from the registered layout it lags a cycle
+  mut I14 "uses[lx][b] <= (b[2:0] < n_slots_c) && slot_lists_c[b][lx];" "uses[lx][b] <= (b[2:0] < n_slots) && slot_lists[b][lx];" b &
   wait
   for f in $(ls "$RES" | sort -V); do grep -v '^MUTFAIL$' "$RES/$f"; grep -q '^MUTFAIL$' "$RES/$f" && fail=1; done
   rm -rf "$RES"
