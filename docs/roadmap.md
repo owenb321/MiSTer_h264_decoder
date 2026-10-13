@@ -1005,6 +1005,15 @@ letterboxed, a narrower one -- 4:3 included -- pillarboxed, 16:9 filled), HDMI's
 - [x] On a CRT at 480i (.236, the maintainer, 2026-10-12): looks good, with the 0.15-era set replaced by main's core
       and clients (`history.md` §48).
 
+## A field store's chroma at Figure E-1's field siting (2026-10-12, found by MiSTer_UMD_Video) -- 🔧 built on `fix/chroma-field`
+
+`docs/chroma.md` §2, `history.md` §49. A field's chroma offset was the frame's in the field's own lines (field-centred);
+Figure E-1 puts it at `(voff + p) / 2`. Field-coded content only (interlaced H.264, the player's interlaced MPEG-2).
+- [x] `disp_reader` `c_vf`, the golden's rule and `check_field_oracle` (ffmpeg `interl=1`, six sitings); `run_disp_reader.sh
+      --red` ALL GREEN (N12-N14).
+- [x] On .201 against the golden, main's build as the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %).
+- [ ] A passing seed (first roll SEED 1 MARGINAL 99.58 / 97.82; a sweep).
+
 ## Phase 7 — For integrators
 
 - [x] ✅ **The interface frozen at 1.0 -- MERGED (PR fj#43)** (2026-10-07; `architecture.md` "Version 1.0",
