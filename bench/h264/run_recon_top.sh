@@ -143,6 +143,8 @@
 #   S5  recon_top: no bound (a 3,780-macroblock picture decoded into a 2 MiB store) (big) -> [refuse]
 #   S6  recon_top: the refused slice still handed to recon_dpb (a store opened, the unwritten
 #       store emitted to the display: the defect found 2026-10-02, the 1,620 bound had it) (big) -> [refuse]
+#   S7  recon_top: (perf/retime) the slice handed to recon_dpb a cycle before the registered compare
+#       settles (sr_d2: the previous slice's verdict -- reset's 0 for the first)          (big) -> [refuse]
 #
 # Interface 0.16, the colour (docs/colour.md): twenty clips of two IDR pictures, the VUI written by ffmpeg's
 #   h264_metadata (every Table E-5 class, both ranges, the size rule at 1,280 wide / 576 and 592 high / a
@@ -585,9 +587,11 @@ PYEOF
          "base_q <= dpb_base + {7'd0, gcode_q[6:2], 17'd0} + plane_off;" hd pre &
   mut S3 h264/dec/recon_mb_fsm.svh "wire  [28:0] col_base_w = dpb_base + {6'd0, col_store, 18'd0} + off_side;" \
          "wire  [28:0] col_base_w = dpb_base + {7'd0, col_store, 17'd0} + off_side;" hd pre &
-  mut S4 h264/dec/recon_top.sv "wire         sz_over = (sz_prod > 21'd3600);" "wire         sz_over = (sz_prod > 21'd1620);" hd "count|hang|out" &
-  mut S5 h264/dec/recon_top.sv "wire         sz_over = (sz_prod > 21'd3600);" "wire         sz_over = 1'b0;" big refuse +expect_refused &
-  mut S6 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d1 && !sz_over;" "wire         dpb_slice_ready = sr_d1;" big refuse +expect_refused &
+  mut S4 h264/dec/recon_top.sv "sz_over <= (sz_prod > 21'd3600);" "sz_over <= (sz_prod > 21'd1620);" hd "count|hang|out" &
+  mut S5 h264/dec/recon_top.sv "sz_over <= (sz_prod > 21'd3600);" "sz_over <= 1'b0;" big refuse +expect_refused &
+  mut S6 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d3 && !sz_over;" "wire         dpb_slice_ready = sr_d3;" big refuse +expect_refused &
+  # (perf/retime) the size's register stages: the hand-off a cycle before the compare has settled
+  mut S7 h264/dec/recon_top.sv "wire         dpb_slice_ready = sr_d3 && !sz_over;" "wire         dpb_slice_ready = sr_d2 && !sz_over;" big refuse +expect_refused &
   wait
   # P5d, the output process (sequenced: memory)
   mut O1 h264/dec/recon_dpb.sv "(!best_found || sq_poc < best_poc)" "(!best_found || sq_poc > best_poc)" c44b out &

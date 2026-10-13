@@ -65,7 +65,7 @@
 // held), the samples land in a 16-deep output FIFO and the sweep issues an output-
 // producing read only while fewer than 16 are in flight (issued, not yet taken by the
 // consumer); the prologue reads (no output) are never gated. win_addr is a registered
-// output; a read is 9 register stages from its address to the FIFO (RAM, S1..S7),
+// output; a read is 10 register stages from its address to the FIFO (RAM, S1..S8),
 // then the output register. The two shift-register rows and the h1 row only advance
 // on a real read, so a credit bubble shifts nothing in.
 //
@@ -147,7 +147,7 @@ module mc_interp (
     logic [4:0] fcnt;
     wire        pop  = pred_valid && pred_ready;
     wire        load = (fcnt != 5'd0) && (!pred_valid || pred_ready);
-    wire        fpush;                // an output sample leaves the pipeline (S7)
+    wire        fpush;                // an output sample leaves the pipeline (S8)
     wire  [7:0] res;
 
     // ---- the sweep --------------------------------------------------------------------
@@ -282,10 +282,19 @@ module mc_interp (
             default:  begin opa = m7;  opb = s7;  end              // r = (m + s + 1) >> 1
         endcase
     end
-    wire [8:0] avg9 = {1'b0, opa} + {1'b0, opb} + 9'd1;
-    assign res   = (cls_7 == C_CHR) ? cr7 : single ? opa : avg9[8:1];
-    assign fpush = t7_ov;
-    always_ff @(posedge clk) if (fpush) fmem[wptr] <= {t7_last, res};
+    // ---- S8 (perf/retime, 2026-10-13): Table 8-12's operands registered, then the average and
+    // the FIFO write -- the select (from fx_7 / fy_7), the 9-bit average and the result mux into
+    // fmem's write port were clk_dec's worst path in every census. The output credits bound every
+    // sample in flight wherever it is (inflight <= 16), so a stage more changes no flow control
+    logic [7:0] opa8, opb8, cr8;
+    logic       single8, chr8, t8_ov, t8_last;
+    always_ff @(posedge clk) begin
+        opa8 <= opa; opb8 <= opb; cr8 <= cr7; single8 <= single; chr8 <= (cls_7 == C_CHR);
+    end
+    wire [8:0] avg9 = {1'b0, opa8} + {1'b0, opb8} + 9'd1;
+    assign res   = chr8 ? cr8 : single8 ? opa8 : avg9[8:1];
+    assign fpush = t8_ov;
+    always_ff @(posedge clk) if (fpush) fmem[wptr] <= {t8_last, res};
 
     // ---- registers ----------------------------------------------------------------------
     always_ff @(posedge clk or negedge rst_n) begin
@@ -308,7 +317,7 @@ module mc_interp (
             t2_iss <= 1'b0; t2_ov <= 1'b0; t2_last <= 1'b0;
             t3_iss <= 1'b0; t3_ov <= 1'b0; t3_last <= 1'b0;
             t4_iss <= 1'b0; t4_ov <= 1'b0; t4_last <= 1'b0;
-            t5_ov <= 1'b0; t5_last <= 1'b0; t6_ov <= 1'b0; t6_last <= 1'b0; t7_ov <= 1'b0; t7_last <= 1'b0;
+            t5_ov <= 1'b0; t5_last <= 1'b0; t6_ov <= 1'b0; t6_last <= 1'b0; t7_ov <= 1'b0; t7_last <= 1'b0; t8_ov <= 1'b0; t8_last <= 1'b0;
             wptr <= 4'd0; rptr <= 4'd0; fcnt <= 5'd0;
             pred_valid <= 1'b0; pred <= 8'd0; pred_last <= 1'b0;
         end else begin
@@ -374,6 +383,7 @@ module mc_interp (
             t5_ov <= t4_ov; t5_last <= t4_last; t5_s <= t4_s;
             t6_ov <= t5_ov; t6_last <= t5_last; t6_s <= t5_s;
             t7_ov <= t6_ov; t7_last <= t6_last; t7_s <= t6_s;
+            t8_ov <= t7_ov; t8_last <= t7_last;
             cls_7 <= cls_s[t6_s]; fx_7 <= fx_s[t6_s]; fy_7 <= fy_s[t6_s];
 
             // -- S1
@@ -435,13 +445,13 @@ module mc_interp (
             cr6 <= cv[13:6];
 
             // -- S7: into the FIFO, and the output register
-            if (t7_ov) wptr <= wptr + 4'd1;
+            if (t8_ov) wptr <= wptr + 4'd1;
             if (load) begin
                 {pred_last, pred} <= fmem[rptr];
                 rptr <= rptr + 4'd1;
                 pred_valid <= 1'b1;
             end else if (pop) pred_valid <= 1'b0;
-            fcnt <= fcnt + {4'd0, t7_ov} - {4'd0, load};
+            fcnt <= fcnt + {4'd0, t8_ov} - {4'd0, load};
         end
     end
 

@@ -362,6 +362,13 @@ module recon_inter (
     wire         k_split  = (kd_bw >= 5'd8);
     wire  [4:0]  k_lw     = k_split ? {1'b0, kd_bw[4:1]} : kd_bw;     // a lane's width
     wire  [4:0]  k_stride = kd_c ? kd_bw + 5'd1 : kd_bw + 5'd5;       // the whole window's
+    // (perf/retime, 2026-10-13) each bank's lane sample count (lane width x height), registered from
+    // the bank's own descriptor -- the push took the product behind the kb select in one cycle. A
+    // descriptor is filled (d_*[fb]) long before its item starts, so the register's cycle never shows
+    logic [8:0]  bank_n [0:1];
+    always_ff @(posedge clk)
+        for (int b = 0; b < 2; b++)
+            bank_n[b] <= {4'd0, (d_bw[b] >= 5'd8) ? {1'b0, d_bw[b][4:1]} : d_bw[b]} * {4'd0, d_bh[b]};
     logic        mc_start;
     logic        mc_kind;                  // the item mc_start starts: 0 list 0 of a bi-predicted group
                                            // (into pbuf), 1 the last list (through wpred)
@@ -523,7 +530,7 @@ module recon_inter (
                     q_kind[tl] <= mc_kind; q_bi2[tl] <= kd_bi; q_pb[tl] <= pbb; q_c[tl] <= kd_c;
                     q_mode[tl] <= wp_mode; q_lwd[tl] <= wp_logwd; q_w0[tl] <= wp_w0; q_w1[tl] <= wp_w1;
                     q_o0[tl] <= wp_o0; q_o1[tl] <= wp_o1;
-                    q_n[tl] <= {4'd0, k_lw} * {4'd0, kd_bh};
+                    q_n[tl] <= bank_n[kb];
                     q_pl[tl] <= kd_plane;
                     q_gx2[tl] <= kd_c ? {1'b0, kd_gx[4:1]} : kd_gx; q_gy2[tl] <= kd_c ? {1'b0, kd_gy[4:1]} : kd_gy;
                     q_off[tl] <= (ln == 0) ? 5'd0 : k_lw; q_klw[tl] <= k_lw;
