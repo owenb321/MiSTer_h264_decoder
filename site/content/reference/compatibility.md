@@ -1,6 +1,6 @@
 # Compatibility
 
-Current as of: release 1.0.0.
+Current as of: release 1.1.0.
 
 | | Status |
 |---|---|

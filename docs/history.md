@@ -1738,7 +1738,7 @@ The same ~1.4 % residual (at most 3 codes) on both builds: the decode / conversi
 the same script: 98.61 % exact, 99.99 % within 2, max 3 (main's rule 1.25 %); HDMI 27.000 MHz. (.201 was running a DVD
 harness Main left from that session's round -- Main's binary-switch trap; the raster does not depend on it.)
 
-## 50. The 93 % ALM retime and the fitter's target (perf/retime, 2026-10-13)
+## 50. The 93 % ALM retime and the fitter's target (perf/retime, 2026-10-13; ✅ MERGED (PR #18))
 
 `docs/throughput.md` §8. Every RTL branch since 93 % ALM had needed a seed sweep. Three retime rounds from the census
 (recon_top's size check, mc_interp S8, recon_inter's bank count and setup fields, the header words into recon_hdr,
@@ -1749,3 +1749,16 @@ seed spread (each netlist ~93-104 MHz across seeds 5 / 1 / 2 / 4); `h264/h264_fi
 **On .201**, main's build the control arm, `h264play` with VUI pacing (idle = `rc_stall` over the play time at 96.43
 MHz): the 10 Mbit/s Sunshine capture idle 64.8 % on both; x264 720p30 8 Mbit/s 17.5 % on both (1.21x); every picture,
 errors / late 0. (.201 had a DVD harness Main resident from that session's round; the measurement does not depend on it.)
+
+## 51. Release 1.1.0 (2026-10-14)
+
+The first public release (the 1.0.0 draft of 2026-10-09 was never published; it predated PRs #8-#18). Release commit
+`30c5f44` (`release/1.1.0`): CORE_VERSION `v1.1.0`, the manual's released version, compatibility's current-as-of, the
+README; a docs sweep over `fdecab5..main` found every feature's pages current. Interface 1.1 (the 1.0 layout, frozen).
+
+**The fit** (`--release`): SEED 1 first roll PASS, clk_dec 102.84 / 104.12, clk_vid 91.69 / 91.99, HDMI gate / lint /
+canary PASS, ALM 40,943 (98 %), RAM 421, DSP 110, `H264_20261014.rbf`.
+
+**On .201:** HDMI 27.000 MHz at `video_mode=2` (720x480); word 1 0x0101; 480p the 10 Mbit/s Sunshine capture (1,315
+pictures) and x264 720p30 8 Mbit/s (600) -- errors / late 0, idle 64.8 % / 17.5 % as main's; 480i the capture, errors /
+late / `disp_fetch_late` 0. Restored.

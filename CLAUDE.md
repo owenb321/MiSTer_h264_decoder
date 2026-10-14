@@ -368,7 +368,7 @@ the golden's rule + UMD's `up_fv` + `check_field_oracle` (ffmpeg `interl=1`, six
 build the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %). No interface change. **Next: `perf/retime`**
 (the maintainer, 2026-10-13): every branch since 93 % ALM has needed a sweep -- the decoder's own paths (`recon_inter`'s
 5x5 product, `recon_hdr`, `recon_mb`: the 1.1 sweep's census), the P5b playbook, cosim bit-exact, ~105 first roll.
-**The 93 % ALM retime (`perf/retime`, 2026-10-13; `docs/throughput.md` §8, `history.md` §50)** 🔧: three rounds from
+**The 93 % ALM retime (`perf/retime`, 2026-10-13; `docs/throughput.md` §8, `history.md` §50) ✅ MERGED (PR #18), ✅ HW-CONFIRMED on .201 (no throughput change, errors 0)**: three rounds from
 the census (recon_top's size check in three steps, mc_interp S8, recon_inter's bank count and setup fields, the header
 words into recon_hdr, recon_mb's QP and DC clears, mb_intake's slot-use table, mv_pred's entry select), each cluster
 gone, but **the seed spread is placement's: ~93-104 MHz across four seeds on every netlist** -- measure a round on several

@@ -1014,7 +1014,7 @@ Figure E-1 puts it at `(voff + p) / 2`. Field-coded content only (interlaced H.2
 - [x] On .201 against the golden, main's build as the control arm: 98.61 % exact / 99.99 % within 2 (main: 1.25 %).
 - [x] A passing seed: SEED 5 105.24 / 102.18 (SEEDs 1-4 missed), HDMI gate PASS; the same result on .201.
 
-## The 93 % ALM retime and the fitter's target (2026-10-13, `perf/retime`) -- 🔧 built
+## The 93 % ALM retime and the fitter's target (2026-10-13, `perf/retime`) -- ✅ MERGED (PR #18) · ✅ HW-CONFIRMED on .201 (2026-10-13)
 
 `docs/throughput.md` §8, `history.md` §50. Every branch since 93 % ALM needed a seed sweep; agreed with the maintainer
 to retime.
