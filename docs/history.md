@@ -1738,7 +1738,7 @@ The same ~1.4 % residual (at most 3 codes) on both builds: the decode / conversi
 the same script: 98.61 % exact, 99.99 % within 2, max 3 (main's rule 1.25 %); HDMI 27.000 MHz. (.201 was running a DVD
 harness Main left from that session's round -- Main's binary-switch trap; the raster does not depend on it.)
 
-## 50. The 93 % ALM retime and the fitter's target (perf/retime, 2026-10-13)
+## 50. The 93 % ALM retime and the fitter's target (perf/retime, 2026-10-13; ✅ MERGED (PR #18))
 
 `docs/throughput.md` §8. Every RTL branch since 93 % ALM had needed a seed sweep. Three retime rounds from the census
 (recon_top's size check, mc_interp S8, recon_inter's bank count and setup fields, the header words into recon_hdr,

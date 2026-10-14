@@ -74,7 +74,7 @@ is a complete reference player.
 **A proof of concept, offered as is.** Everything above runs on the hardware (a DE10-Nano,
 tested over HDMI, on CRTs and through a RetroTINK); the Jellyfin client, the video player and the
 camera viewer are early. **No support is provided**: issues and pull requests may go unanswered,
-and nothing here is a promise of future work. Release 1.0 packages what is here.
+and nothing here is a promise of future work. Release 1.1 packages what is here.
 
 **If you fork it**, these are the places to start:
 
