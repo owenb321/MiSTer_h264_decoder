@@ -420,6 +420,9 @@
 #     fitter aims clk_dec at ~104.5 MHz, quartus_sta unaffected): 5 98.6/99.21, **SEED 1 102.28/102.79 PASS**, 2
 #     102.47/99.26, 4 98.02/96.79; HDMI gate PASS; H264_retimeoc_20261013_0846.rbf. SEED 1 pinned. (docs/throughput.md
 #     S8: at 93-98 % ALM placement decides; the retime moved the clusters, not the seed spread.)
+#   2026-10-14 Release 1.1.0 (30c5f44: CORE_VERSION v1.1.0): SEED 1 first roll PASS, clk_dec 102.84 / 104.12,
+#     clk_vid 91.69 / 91.99, HDMI gate PASS, lint / canary PASS; ALM 40,943 / 41,910, RAM 421, DSP 110,
+#     H264_20261014.rbf (--release).
 
 set_global_assignment -name TOP_LEVEL_ENTITY sys_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.0
