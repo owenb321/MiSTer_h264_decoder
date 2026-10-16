@@ -320,7 +320,9 @@ of the same major and a minor >= its own (`h264ring_version_ok()` in `h264ring.h
 pages normative. Fit SEED 2 104.68 / 104.28 PASS (`H264_iface1_20261008_0042.rbf`); on .201 word 1 `0x0100`, a capture
 plays as on main's build (control arm equal), 0.17 <-> 1.0 refused both ways (`docs/history.md` §41). **Release 1.0.0 drafted
 2026-10-09** (GitHub draft `v1.0.0`, release commit `fdecab5`, SEED 12; the zip packaged by CI, PR #6; tested on .201,
-`docs/history.md` §42) -- published with the move to public (Pages needs it). **Chroma reconstruction (roadmap Phase 6e) ✅ MERGED
+`docs/history.md` §42) -- never published: replaced by **Release 1.1.0 ✅ PUBLISHED 2026-10-15** (the first public release:
+release commit `30c5f44` via PR #19, `H264_20261014.rbf` SEED 1 102.84 / 104.12, the CI zip; the repository public, the
+manual on Pages -- the `github-pages` environment needed a `v*` tag rule; `docs/history.md` §51). **Chroma reconstruction (roadmap Phase 6e) ✅ MERGED
 (PR #8)**: the maintainer's bands beside red in Native (HDMI) were the reader's NEAREST chroma. First an
 identity-only fix (fit SEED 5, verified on .201: `docs/history.md` §43), then **the full version** (decided 2026-10-10,
 `docs/chroma.md`): the SPS's `chroma_sample_loc_type` carried to the display, chroma rows in their own 8 slots, bilinear
@@ -661,8 +663,8 @@ whatever they want with it. Said in the README (its callout and "Status"), the m
 "Reporting a bug", and the issue chooser (`.github/ISSUE_TEMPLATE/config.yml`). Never write a support
 promise ("please report", "we will fix") into a user-facing page.
 
-**Hosting: GitHub** (`github.com/owenb321/MiSTer_h264_decoder`; private while it is staged,
-public with the first release). The Forgejo repository holds the bring-up history (PRs fj#1 to
+**Hosting: GitHub** (`github.com/owenb321/MiSTer_h264_decoder`; **public since 2026-10-15**, with
+release 1.1.0; the manual at `https://owenb321.github.io/MiSTer_h264_decoder/`). The Forgejo repository holds the bring-up history (PRs fj#1 to
 fj#45) and is not imported. Write everything as if it were public already (below).
 
 - **Never commit directly to `main`.** Branch first (`feature/<slug>`, `fix/<slug>`).

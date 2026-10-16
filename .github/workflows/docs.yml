@@ -4,6 +4,11 @@ name: docs
 # (`tools/docs_check.py`, `mkdocs build --strict`) are also the local pre-commit gate.
 # Pages needs the repository public (or a paid plan) and Settings -> Pages -> Source set
 # to "GitHub Actions"; the deploy runs only on a published release.
+# ⚠ AND the `github-pages` environment must let a TAG deploy: enabling Pages creates it allowing only the
+# default branch (Settings -> Environments -> github-pages -> Deployment branches and tags), so the first
+# release's deploy failed with "Tag v1.1.0 is not allowed to deploy to github-pages due to environment
+# protection rules". A tag rule `v*` was added 2026-10-15 (the API: POST .../environments/github-pages/
+# deployment-branch-policies, name=v*, type=tag); a fork that publishes its manual needs the same.
 
 # Two jobs with two different jobs to do:
 #
