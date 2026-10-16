@@ -1052,8 +1052,10 @@ to retime.
       (private while staged); `origin` is GitHub, the Forgejo repository the remote `forgejo` (never pushed to
       GitHub). **The release's clients built in CI** (PR #1): `clients.yml` builds the four HPS clients in images
       made from the repository -- a check on every PR touching `hps/` or `clients/`, and called by `package.yml`
-      with the manifest's commit, so the zip's clients are the release commit's. Left for going public, with the
-      first release (1.0, above): the repository's visibility, Settings -> Pages -> Source "GitHub Actions".
+      with the manifest's commit, so the zip's clients are the release commit's. **Public since 2026-10-15, with the
+      first release, 1.1.0** (`history.md` §51; the 1.0.0 draft was never published): the repository's visibility,
+      Settings -> Pages -> Source "GitHub Actions", and the `github-pages` environment's tag rule `v*` (`docs.yml`'s
+      header); the manual at https://owenb321.github.io/MiSTer_h264_decoder/.
       MiSTer_UMD_Video is private, so nothing public links it.
 - [x] Example integrations: a Moonlight client fork (PR fj#13), the Jellyfin client (PR fj#24) and the file player
       (PR fj#27), below. **A Plex client is dropped** (the maintainer, 2026-10-04: "I'm content with Jellyfin");

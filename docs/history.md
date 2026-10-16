@@ -1762,3 +1762,15 @@ canary PASS, ALM 40,943 (98 %), RAM 421, DSP 110, `H264_20261014.rbf`.
 **On .201:** HDMI 27.000 MHz at `video_mode=2` (720x480); word 1 0x0101; 480p the 10 Mbit/s Sunshine capture (1,315
 pictures) and x264 720p30 8 Mbit/s (600) -- errors / late 0, idle 64.8 % / 17.5 % as main's; 480i the capture, errors /
 late / `disp_fetch_late` 0. Restored.
+
+**The draft** (`tools/publish_draft.sh`, the stale v1.0.0 draft deleted first): `package.yml` built the four clients from the
+release commit and packaged `MiSTer_h264_decoder_v1.1.0.zip`; downloaded, its core byte-identical to the tested one, and its
+own video player run on .201 from a scratch folder against the release core: a 720p30 8 Mbit/s MP4, 466 pictures, errors /
+late / skipped 0. (A raw `.264` remuxed to MP4 with `-c copy` showed 32 late pictures under both the zip's player and 1.0.0's:
+the file's timestamps, not the player -- encode test files straight to MP4.)
+
+**Published 2026-10-15**, once the maintainer had made the repository public and set Pages to GitHub Actions. The tag
+`v1.1.0` sits on `main`'s head `6fca8c5` (PR #19's merge, which contains the release commit). The manual's first deploy was
+refused -- "Tag v1.1.0 is not allowed to deploy to github-pages due to environment protection rules": enabling Pages had
+created the `github-pages` environment allowing only `main`, and `docs.yml` deploys from the release tag. A tag rule `v*`
+added (the API), the deploy re-run: the manual live at https://owenb321.github.io/MiSTer_h264_decoder/ showing v1.1.0.

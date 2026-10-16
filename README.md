@@ -28,17 +28,17 @@ Each one starts from MiSTer's **Scripts** menu and is driven with the gamepad.
 
 | Program | What it does |
 |---|---|
-| **Moonlight** ([manual](site/content/using/moonlight.md)) | Streams games from a PC running Sunshine. The MiSTer's keyboard, mouse and gamepads reach the PC; rumble comes back. |
-| **Jellyfin** ([manual](site/content/using/jellyfin.md)) | A cast target for a Jellyfin server: pick a film in any Jellyfin app and it plays on the MiSTer, with text subtitles. |
-| **Video player** ([manual](site/content/using/player.md)) | Plays files from the SD card, a USB drive or a network share. H.264 goes to the core; MPEG-2, DivX / Xvid, WMV, Theora and Motion JPEG are decoded on the ARM and shown the same way. |
-| **Camera viewer** ([manual](site/content/using/camera.md)) | Shows a USB webcam or capture device -- the MiSTer as a 15 kHz monitor for another source. |
+| **Moonlight** ([manual](https://owenb321.github.io/MiSTer_h264_decoder/using/moonlight/)) | Streams games from a PC running Sunshine. The MiSTer's keyboard, mouse and gamepads reach the PC; rumble comes back. |
+| **Jellyfin** ([manual](https://owenb321.github.io/MiSTer_h264_decoder/using/jellyfin/)) | A cast target for a Jellyfin server: pick a film in any Jellyfin app and it plays on the MiSTer, with text subtitles. |
+| **Video player** ([manual](https://owenb321.github.io/MiSTer_h264_decoder/using/player/)) | Plays files from the SD card, a USB drive or a network share. H.264 goes to the core; MPEG-2, DivX / Xvid, WMV, Theora and Motion JPEG are decoded on the ARM and shown the same way. |
+| **Camera viewer** ([manual](https://owenb321.github.io/MiSTer_h264_decoder/using/camera/)) | Shows a USB webcam or capture device -- the MiSTer as a 15 kHz monitor for another source. |
 
 ## What the core handles
 
 | | |
 |---|---|
 | **Video** | H.264 High or Main profile, 8-bit 4:2:0, any size up to 1280x720. Real time at **854x480 / 720x480, 60 frames/s** (a 10 Mbit/s game stream) and **1280x720, 30 frames/s** (game streams, films and transcodes up to about 8 Mbit/s). CAVLC streams are rewritten on the ARM, up to about 4-5 Mbit/s. |
-| **Pictures you decode** | Any format the program decodes on the ARM itself, handed over as raw 8-bit 4:2:0 (or 4:2:2) pictures and presented exactly like decoded H.264. **In practice standard definition (up to 720x576) at up to 30 frames/s**: the ARM has one free core, and copying a picture into the core's memory alone takes about 5 ms at 720x480 (14 ms at 1280x720), so software decoding does not keep up at 720p. See [the limits](site/content/integrating/pictures.md#limits). |
+| **Pictures you decode** | Any format the program decodes on the ARM itself, handed over as raw 8-bit 4:2:0 (or 4:2:2) pictures and presented exactly like decoded H.264. **In practice standard definition (up to 720x576) at up to 30 frames/s**: the ARM has one free core, and copying a picture into the core's memory alone takes about 5 ms at 720x480 (14 ms at 1280x720), so software decoding does not keep up at 720p. See [the limits](https://owenb321.github.io/MiSTer_h264_decoder/integrating/pictures/#limits). |
 | **Audio** | 48 kHz 16-bit stereo PCM, played against the same clock as the pictures; pause and volume. |
 | **Output** | 480i, 576i, 480p, 576p and HDMI at the picture's own size. 59.94, exactly 60.00, or 50 Hz, chosen from the stream. The picture's colour (BT.601 / 709 / 2020) honoured. |
 | **Your own screens** | A program draws menus, subtitles or a progress bar into the Linux framebuffer; the core composites them over the video on HDMI and analog alike. |
@@ -46,7 +46,7 @@ Each one starts from MiSTer's **Scripts** menu and is driven with the gamepad.
 
 Higher rates (720p at 60 frames/s, 1080p) decode correctly but fall behind, visibly, so the
 included programs avoid them: the player and Moonlight refuse them by name, Jellyfin asks the
-server for a transcode. The full list: [compatibility](site/content/reference/compatibility.md).
+server for a transcode. The full list: [compatibility](https://owenb321.github.io/MiSTer_h264_decoder/reference/compatibility/).
 
 ## Write your own program
 
@@ -66,7 +66,7 @@ for (each access unit)
 h264ring_close(r);
 ```
 
-Start with [Integrating a program](site/content/integrating/overview.md); `hps/feeder/h264play.c`
+Start with [Integrating a program](https://owenb321.github.io/MiSTer_h264_decoder/integrating/overview/); `hps/feeder/h264play.c`
 is a complete reference player.
 
 ## Status
@@ -98,12 +98,12 @@ USE_DOCKER=1 clients/moonlight/build.sh        # likewise clients/jellyfin, clie
 ```
 
 Copy the `.rbf` to `_Other/` on the SD card and each client's `build/dist/*` to the card's root.
-[Building from source](site/content/about/building.md) has the details.
+[Building from source](https://owenb321.github.io/MiSTer_h264_decoder/about/building/) has the details.
 
 ## Documentation
 
-- **[The manual](site/content/index.md)** -- for users, and for developers of
-  programs that feed the core (`site/content/`, built with MkDocs).
+- **[The manual](https://owenb321.github.io/MiSTer_h264_decoder/)** -- for users, and for developers of
+  programs that feed the core (its source is `site/content/`, built with MkDocs).
 - **Engineering notes** -- `docs/`: why the design is the way it is. Not user documentation.
   References written `fj#NN`, and commit SHAs quoted there, come from the private repository the
   core was brought up in and do not resolve here.
@@ -112,7 +112,7 @@ Copy the `.rbf` to `_Other/` on the SD card and each client's `build/dist/*` to 
 
 The decoder and display path are forked from **MiSTer_UMD_Video** (a PSP UMD Video player core) and
 through it from **[MiSTer_DVD](https://github.com/owenb321/MiSTer_DVD)**, by the same author; the
-framework is MiSTer's. See [acknowledgements](site/content/about/acknowledgements.md).
+framework is MiSTer's. See [acknowledgements](https://owenb321.github.io/MiSTer_h264_decoder/about/acknowledgements/).
 
 GPL-3.0-or-later, except `hps/` (the client library, `h264play`, `h264stat`), which is MIT. See
 [LICENSE](LICENSE), [hps/LICENSE](hps/LICENSE) and [NOTICE](NOTICE) (framework licences,
